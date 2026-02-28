@@ -1,6 +1,6 @@
 ---
 id: 1
-title: Create-project-constitution
+title: Create Project Constitution
 stage: constitution
 date_iso: 2025-01-01
 surface: agent
@@ -22,14 +22,14 @@ files:
   - .specify/templates/tasks-template.md
 tests: []
 prompt_text: |
-  /sp.constitution Create the projectr a comprehensive technical book and interactive documentation site built with Docusaurus.
+  /sp.constitution Create a comprehensive technical book and interactive documentation site built with Docusaurus.
 
-  The book
+  The book is a capstone-level educational resource titled "Physical AI & Humanoid Robotics: Bridging Digital Intelligence with the Physical World".
 
-  It is a capstone-level educational resource based on the following course outline:
+  It is based on the following course outline:
 
   Course Focus: AI Systems in the Physical World – Embodied Intelligence.
-  Goal: Bridge the gap between digital AI (the "brain") and physical robotic bodies. Students apply AI knowledge to control humanoid robots in s's constitution.md file fo is titled "Physical AI & Humanoid Robotics: Bridging Digital Intelligence with the Physical World".imulated and real environments using modern robotics tools.
+  Goal: Bridge the gap between digital AI (the "brain") and physical robotic bodies. Students apply AI knowledge to control humanoid robots in simulated and real environments using modern robotics tools.
 
   Quarter Overview: Introduces Physical AI using ROS 2, Gazebo/Unity simulation, NVIDIA Isaac Sim/ROS, and Vision-Language-Action models for natural human-robot interaction.
 
@@ -67,7 +67,7 @@ prompt_text: |
   Constitution Principles (immutable guidelines that ALL future spec, plan, tasks, and implementation MUST follow):
   1. All content must be technically accurate and based on current best practices in ROS 2, NVIDIA Isaac, Gazebo/Unity, and VLA models as of 2025.
   2. Use Docusaurus exclusively for the site – no alternatives.
-  3. Favor MDX for rich content: executable code snippets (via @docusaurus/theme-live-codeblock if needed), Mermaid diagrams for architectures, embedded YouTube/IFrame for demos.
+  3. Favor MDX for rich content: executable code snippets, Mermaid diagrams for architectures, embedded YouTube/IFrame for demos.
   4. Structure strictly follows the 4 modules + intro + capstone.
   5. Every module must include: Theory, Tools/Libraries, Hands-on Labs (with code), Challenges, and Quiz/Reflection questions.
   6. Emphasize embodied intelligence, physical laws, and safe human-robot interaction.
