@@ -1,0 +1,177 @@
+# API Contract: Physical AI & Humanoid Robotics Site
+
+## Overview
+This document describes the API contracts for the Physical AI & Humanoid Robotics educational content site. While primarily a documentation site, this API provides search and content retrieval functionality.
+
+## Base URL
+```
+https://physical-ai-humanoid-robotics.example.com/api/v1
+```
+
+## Authentication
+No authentication required for public content access.
+
+## Endpoints
+
+### Search Content
+```
+GET /search
+```
+
+#### Query Parameters
+- `q` (string, required): Search query
+- `limit` (integer, optional): Number of results to return (default: 10, max: 50)
+- `offset` (integer, optional): Number of results to skip (default: 0)
+
+#### Response
+```json
+{
+  "results": [
+    {
+      "id": "string",
+      "title": "string",
+      "url": "string",
+      "content_preview": "string",
+      "module": "string",
+      "type": "string"
+    }
+  ],
+  "total": "integer",
+  "limit": "integer",
+  "offset": "integer"
+}
+```
+
+#### Example Request
+```
+GET /search?q=ROS+2&limit=5
+```
+
+#### Example Response
+```json
+{
+  "results": [
+    {
+      "id": "module1-ros2/intro",
+      "title": "Introduction to ROS 2",
+      "url": "/docs/module1-ros2/intro",
+      "content_preview": "ROS 2 (Robot Operating System 2) is a flexible framework for writing robot applications...",
+      "module": "Module 1: The Robotic Nervous System (ROS 2)",
+      "type": "page"
+    }
+  ],
+  "total": 1,
+  "limit": 5,
+  "offset": 0
+}
+```
+
+### Get Content by ID
+```
+GET /content/{id}
+```
+
+#### Path Parameters
+- `id` (string, required): Content ID (e.g., "module1-ros2/intro")
+
+#### Response
+```json
+{
+  "id": "string",
+  "title": "string",
+  "content": "string",
+  "module": "string",
+  "type": "string",
+  "related_content": [
+    {
+      "id": "string",
+      "title": "string",
+      "url": "string"
+    }
+  ]
+}
+```
+
+#### Example Request
+```
+GET /content/module1-ros2/intro
+```
+
+#### Example Response
+```json
+{
+  "id": "module1-ros2/intro",
+  "title": "Introduction to ROS 2",
+  "content": "# Introduction to ROS 2\n\nROS 2 (Robot Operating System 2) is a flexible framework...",
+  "module": "Module 1: The Robotic Nervous System (ROS 2)",
+  "type": "page",
+  "related_content": [
+    {
+      "id": "module1-ros2/theory",
+      "title": "ROS 2 Theory and Architecture",
+      "url": "/docs/module1-ros2/theory"
+    }
+  ]
+}
+```
+
+### Get All Modules
+```
+GET /modules
+```
+
+#### Response
+```json
+{
+  "modules": [
+    {
+      "id": "string",
+      "title": "string",
+      "description": "string",
+      "pages_count": "integer",
+      "labs_count": "integer"
+    }
+  ]
+}
+```
+
+#### Example Response
+```json
+{
+  "modules": [
+    {
+      "id": "module1-ros2",
+      "title": "Module 1: The Robotic Nervous System (ROS 2)",
+      "description": "Introduction to ROS 2 as the robotic nervous system",
+      "pages_count": 8,
+      "labs_count": 3
+    }
+  ]
+}
+```
+
+## Error Responses
+
+### 400 Bad Request
+```json
+{
+  "error": "string",
+  "message": "string"
+}
+```
+
+### 404 Not Found
+```json
+{
+  "error": "NOT_FOUND",
+  "message": "Requested resource not found"
+}
+```
+
+### 500 Internal Server Error
+```json
+{
+  "error": "INTERNAL_ERROR",
+  "message": "An internal server error occurred"
+}
+```

@@ -1,8 +1,8 @@
 # Feature Specification: [FEATURE NAME]
 
-**Feature Branch**: `[###-feature-name]`  
-**Created**: [DATE]  
-**Status**: Draft  
+**Feature Branch**: `[###-feature-name]`
+**Created**: [DATE]
+**Status**: Draft
 **Input**: User description: "$ARGUMENTS"
 
 ## User Scenarios & Testing *(mandatory)*
@@ -11,7 +11,7 @@
   IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
   Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
   you should still have a viable MVP (Minimum Viable Product) that delivers value.
-  
+
   Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
   Think of each story as a standalone slice of functionality that can be:
   - Developed independently
@@ -85,7 +85,7 @@
 ### Functional Requirements
 
 - **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
+- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]
 - **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
 - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
 - **FR-005**: System MUST [behavior, e.g., "log all security events"]
@@ -113,3 +113,31 @@
 - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
 - **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
 - **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+
+## Constitution Compliance Check
+
+*GATE: All features must comply with the Physical AI & Humanoid Robotics Constitution*
+
+**Constitution Principles for Physical AI & Humanoid Robotics:**
+1. All content must be technically accurate and based on current best practices in ROS 2, NVIDIA Isaac, Gazebo/Unity, and VLA models as of 2025
+2. Use Docusaurus exclusively for the site – no alternatives
+3. Favor MDX for rich content: executable code snippets, Mermaid diagrams, embedded demos
+4. Structure strictly follows the 4 modules + intro + capstone
+5. Every module must include: Theory, Tools/Libraries, Hands-on Labs, Challenges, and Quiz/Reflection questions
+6. Emphasize embodied intelligence, physical laws, and safe human-robot interaction
+7. Code examples must be runnable, well-commented, and use Python where possible
+8. Site must be SEO-friendly, fast-loading, and include versioned docs
+9. Never introduce unrequested features; stay faithful to the course outline
+10. Output only clean, production-ready Markdown/MDX files compatible with Docusaurus
+
+**Verification:**
+- [ ] Technical accuracy verified for robotics/AI concepts
+- [ ] Docusaurus implementation confirmed
+- [ ] MDX usage planned for interactive content
+- [ ] Module structure alignment confirmed
+- [ ] Educational content requirements addressed
+- [ ] Embodied intelligence focus maintained
+- [ ] Code examples will be runnable and well-documented
+- [ ] Performance and SEO requirements considered
+- [ ] Scope fidelity maintained
+- [ ] Production-ready output planned

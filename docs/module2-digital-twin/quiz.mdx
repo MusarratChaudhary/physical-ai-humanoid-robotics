@@ -1,0 +1,248 @@
+---
+title: "Module 2 Quiz: Digital Twin Simulation"
+sidebar_label: "Quiz"
+---
+
+# Module 2 Quiz: Digital Twin Simulation
+
+Test your understanding of digital twin simulation concepts, tools, and safety considerations for humanoid robotics.
+
+## Question 1
+
+What is the primary purpose of a digital twin in robotics?
+
+A) To replace physical robots entirely
+B) To create a virtual replica for testing and validation before deploying on physical hardware
+C) To increase the computational complexity of robotic systems
+D) To eliminate the need for safety protocols
+
+<details>
+<summary>Answer</summary>
+B) To create a virtual replica for testing and validation before deploying on physical hardware
+
+A digital twin is a virtual replica of a physical system that enables safe and efficient testing of algorithms, behaviors, and control systems before deployment on expensive physical hardware.
+</details>
+
+## Question 2
+
+Which physics engine is NOT commonly used in Gazebo?
+
+A) ODE (Open Dynamics Engine)
+B) Bullet Physics
+C) NVIDIA PhysX
+D) Simbody
+
+<details>
+<summary>Answer</summary>
+C) NVIDIA PhysX
+
+NVIDIA PhysX is primarily used in Unity and other game engines, not in Gazebo. Gazebo commonly uses ODE, Bullet, and Simbody physics engines.
+</details>
+
+## Question 3
+
+What is the "simulation-to-reality gap"?
+
+A) The difference in computational requirements between simulation and reality
+B) The difference between simulated and real-world robot behavior
+C) The time delay between simulation and real-world events
+D) The cost difference between simulation and physical robots
+
+<details>
+<summary>Answer</summary>
+B) The difference between simulated and real-world robot behavior
+
+The sim-to-real gap refers to the differences between how robots behave in simulation versus in the real world, which can result from imperfect physics models, simplified sensor simulation, and environmental differences.
+</details>
+
+## Question 4
+
+Which Unity feature is particularly useful for training AI models for robotics?
+
+A) High-fidelity graphics rendering
+B) ML-Agents toolkit
+C) Physics engine
+D) Audio system
+
+<details>
+<summary>Answer</summary>
+B) ML-Agents toolkit
+
+Unity's ML-Agents toolkit is specifically designed for training AI models using reinforcement learning and other machine learning techniques in simulation environments.
+</details>
+
+## Question 5
+
+What is domain randomization used for in robotics simulation?
+
+A) To make simulations run faster
+B) To increase the visual quality of simulations
+C) To help bridge the sim-to-real gap by introducing variations in simulation parameters
+D) To connect real hardware to simulations
+
+<details>
+<summary>Answer</summary>
+C) To help bridge the sim-to-real gap by introducing variations in simulation parameters
+
+Domain randomization introduces variations in simulation parameters (like mass, friction, textures, lighting) to train more robust models that can generalize to real-world conditions.
+</details>
+
+## Question 6
+
+Which of the following is NOT a typical sensor simulated in robotic simulation environments?
+
+A) LiDAR
+B) Depth camera
+C) IMU (Inertial Measurement Unit)
+D) Microwave sensor
+
+<details>
+<summary>Answer</summary>
+D) Microwave sensor
+
+Microwave sensors are not typically simulated in standard robotic simulation environments. LiDAR, depth cameras, and IMUs are commonly simulated sensors in robotics.
+</details>
+
+## Question 7
+
+What does HIL stand for in the context of robotics simulation?
+
+A) Hardware Integration Layer
+B) Hardware-in-the-Loop
+C) High-level Interface Language
+D) Human Interaction Learning
+
+<details>
+<summary>Answer</summary>
+B) Hardware-in-the-Loop
+
+Hardware-in-the-Loop (HIL) simulation connects real hardware components to the simulation environment, allowing real sensors to provide data to the virtual environment or real controllers to operate virtual actuators.
+</details>
+
+## Question 8
+
+Which of the following is a key safety consideration when transitioning from simulation to real-world deployment?
+
+A) Ensuring the simulation runs faster than real-time
+B) Building in safety margins and conservative parameters
+C) Using the same parameters in simulation and reality
+D) Eliminating all safety checks to improve performance
+
+<details>
+<summary>Answer</summary>
+B) Building in safety margins and conservative parameters
+
+When transitioning from simulation to reality, it's important to build in safety margins and use conservative parameters since the real world may differ from the simulation environment.
+</details>
+
+## Question 9
+
+What is the primary advantage of using Gazebo for robotics simulation?
+
+A) High-quality graphics rendering
+B) Tight integration with ROS/ROS2
+C) Machine learning capabilities
+D) Cross-platform deployment
+
+<details>
+<summary>Answer</summary>
+B) Tight integration with ROS/ROS2
+
+Gazebo's primary advantage is its native integration with ROS/ROS2, making it easy to connect simulated robots to ROS nodes and use standard ROS message types.
+</details>
+
+## Question 10
+
+Which approach helps address the challenge of the simulation-to-reality gap?
+
+A) Using only high-fidelity models
+B) Implementing domain randomization and validation protocols
+C) Eliminating all noise from simulations
+D) Making simulations as complex as possible
+
+<details>
+<summary>Answer</summary>
+B) Implementing domain randomization and validation protocols
+
+Domain randomization introduces variations in simulation parameters to train more robust models, while validation protocols help ensure that simulation results translate to real-world performance.
+</details>
+
+## Question 11
+
+In Unity robotics simulation, what is the purpose of the URDF Importer?
+
+A) To export Unity scenes to ROS
+B) To import ROS packages into Unity
+C) To directly import ROS robot models defined in URDF format
+D) To convert Unity models to Gazebo format
+
+<details>
+<summary>Answer</summary>
+C) To directly import ROS robot models defined in URDF format
+
+The URDF Importer allows Unity to directly import robot models that are defined in URDF (Unified Robot Description Format), which is the standard format for robot descriptions in ROS.
+</details>
+
+## Question 12
+
+What is a key challenge in real-time robotic simulation?
+
+A) Too much visual detail
+B) Balancing computational efficiency with simulation accuracy
+C) Connecting to the internet
+D) Storing large amounts of video data
+
+<details>
+<summary>Answer</summary>
+B) Balancing computational efficiency with simulation accuracy
+
+Real-time robotic simulation must maintain real-time performance while preserving sufficient accuracy for meaningful results, which requires careful balance of computational demands and model fidelity.
+</details>
+
+## Question 13
+
+Which safety mechanism is important in simulation environments?
+
+A) Preventing the simulation from running too fast
+B) Implementing virtual emergency stops and constraint enforcement
+C) Requiring passwords to access the simulation
+D) Limiting the number of users who can access the simulation
+
+<details>
+<summary>Answer</summary>
+B) Implementing virtual emergency stops and constraint enforcement
+
+Simulation environments should include virtual safety mechanisms like emergency stops, joint limit enforcement, and collision avoidance to prevent dangerous behaviors during testing.
+</details>
+
+## Question 14
+
+What is the purpose of graduated deployment when transferring from simulation to reality?
+
+A) To make the robot gradually become more intelligent
+B) To systematically test and validate robot behaviors in increasing complexity and risk
+C) To slowly increase the robot's speed over time
+D) To gradually reduce the simulation's accuracy
+
+<details>
+<summary>Answer</summary>
+B) To systematically test and validate robot behaviors in increasing complexity and risk
+
+Graduated deployment involves systematically testing robot behaviors starting in constrained, safe environments and gradually increasing complexity and risk as the system proves safe and effective.
+</details>
+
+## Question 15
+
+Which of the following is an advantage of Unity over Gazebo for robotics simulation?
+
+A) Better ROS integration
+B) Higher computational efficiency
+C) Superior graphics rendering and AI integration
+D) Open-source licensing
+
+<details>
+<summary>Answer</summary>
+C) Superior graphics rendering and AI integration
+
+Unity offers superior graphics rendering capabilities and better integration with AI/ML tools like ML-Agents, making it preferable for applications requiring high-quality visuals or machine learning.
+</details>

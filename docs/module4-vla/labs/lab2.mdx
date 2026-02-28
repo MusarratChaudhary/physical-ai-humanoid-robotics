@@ -1,0 +1,1151 @@
+---
+title: "Lab 2: Language Understanding Integration with OpenAI Whisper"
+sidebar_label: "Lab 2: Language Understanding"
+---
+
+# Lab 2: Language Understanding Integration with OpenAI Whisper
+
+In this lab, you'll integrate OpenAI Whisper for speech recognition and combine it with language understanding capabilities to create a voice-to-intent system. You'll learn to process voice commands, interpret them using language models, and prepare the language stream for integration with action planning components.
+
+## Learning Objectives
+
+By the end of this lab, you will be able to:
+- Set up and use OpenAI Whisper for speech recognition
+- Integrate Whisper with language understanding models
+- Process voice commands and convert them to structured intents
+- Implement voice command validation and safety checks
+- Create a complete voice processing pipeline for robotic applications
+
+## Prerequisites
+
+Before starting this lab, ensure you have:
+- Python 3.8+ installed
+- Completed Lab 1: Implementing Vision Systems with CLIP Integration
+- Basic understanding of deep learning concepts
+- Familiarity with PyTorch and Transformers
+- Microphone access for testing voice commands
+
+## Step 1: Setting Up the Environment
+
+First, let's install the necessary packages for our language understanding system:
+
+```bash
+pip install openai-whisper
+pip install transformers torch
+pip install pyaudio
+pip install sounddevice
+pip install speech-recognition
+pip install datasets
+```
+
+Now let's create a basic Whisper processing module:
+
+### Whisper Processing Module:
+```python
+import whisper
+import torch
+import numpy as np
+import librosa
+import os
+from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+import warnings
+warnings.filterwarnings("ignore")
+
+class WhisperProcessor:
+    def __init__(self, model_size="base"):
+        """Initialize the Whisper processor."""
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Loading Whisper model on {self.device}...")
+        
+        # Load Whisper model
+        self.whisper_model = whisper.load_model(model_size, device=self.device)
+        
+        # Load a text generation model for command interpretation
+        self.tokenizer = AutoTokenizer.from_pretrained("facebook/blenderbot-400M-distill")
+        self.text_model = AutoModelForSeq2SeqLM.from_pretrained("facebook/blenderbot-400M-distill")
+        
+        print(f"Whisper processor initialized with {model_size} model")
+    
+    def transcribe_audio(self, audio_path):
+        """Transcribe audio file using Whisper."""
+        result = self.whisper_model.transcribe(audio_path)
+        return result["text"].strip()
+    
+    def transcribe_audio_from_array(self, audio_array, sample_rate=16000):
+        """Transcribe audio from numpy array."""
+        # Ensure audio is in the right format
+        if len(audio_array.shape) > 1:
+            # Stereo to mono
+            audio_array = audio_array.mean(axis=1)
+        
+        # Pad or trim to fit Whisper's requirements
+        if len(audio_array) < 1500:  # Minimum length check
+            return ""
+        
+        result = self.whisper_model.transcribe(audio_array)
+        return result["text"].strip()
+    
+    def interpret_command(self, command_text):
+        """Interpret the transcribed command using a language model."""
+        # Prepare input for the text model
+        inputs = self.tokenizer.encode_plus(
+            command_text,
+            max_length=512,
+            truncation=True,
+            padding=True,
+            return_tensors="pt"
+        )
+        
+        # Generate response
+        with torch.no_grad():
+            outputs = self.text_model.generate(
+                **inputs,
+                max_length=100,
+                num_return_sequences=1,
+                temperature=0.7,
+                do_sample=True
+            )
+        
+        interpreted_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        return interpreted_text
+    
+    def process_voice_command(self, audio_path_or_array, is_file=True):
+        """Complete pipeline: transcribe and interpret voice command."""
+        if is_file:
+            transcribed_text = self.transcribe_audio(audio_path_or_array)
+        else:
+            transcribed_text = self.transcribe_audio_from_array(audio_path_or_array)
+        
+        if not transcribed_text:
+            return {"transcribed": "", "interpreted": "", "intent": "none"}
+        
+        interpreted_text = self.interpret_command(transcribed_text)
+        
+        # Extract intent (simplified approach)
+        intent = self.extract_intent(transcribed_text)
+        
+        return {
+            "transcribed": transcribed_text,
+            "interpreted": interpreted_text,
+            "intent": intent
+        }
+    
+    def extract_intent(self, command_text):
+        """Extract intent from command text (simplified approach)."""
+        command_text_lower = command_text.lower()
+        
+        # Define keywords for different intents
+        navigation_keywords = ["go to", "move to", "navigate", "walk to", "go", "move", "drive", "head to"]
+        manipulation_keywords = ["pick up", "grab", "take", "lift", "hold", "drop", "put", "place", "move"]
+        interaction_keywords = ["talk to", "speak", "say", "tell", "greet", "hello", "hi"]
+        stop_keywords = ["stop", "halt", "pause", "freeze", "cease"]
+        
+        if any(keyword in command_text_lower for keyword in stop_keywords):
+            return "stop"
+        elif any(keyword in command_text_lower for keyword in navigation_keywords):
+            return "navigate"
+        elif any(keyword in command_text_lower for keyword in manipulation_keywords):
+            return "manipulate"
+        elif any(keyword in command_text_lower for keyword in interaction_keywords):
+            return "interact"
+        else:
+            return "unknown"
+
+def main():
+    # Initialize the Whisper processor
+    whisper_processor = WhisperProcessor()
+    
+    print("Whisper processor initialized successfully!")
+    
+    # Example usage (with a dummy audio file)
+    # result = whisper_processor.process_voice_command("path/to/audio/file.wav", is_file=True)
+    # print(f"Result: {result}")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Step 2: Implementing Voice Command Processing
+
+Now let's implement a more sophisticated voice command processing system that includes validation and safety checks:
+
+### Voice Command Processing System:
+```python
+import whisper
+import torch
+import numpy as np
+import pyaudio
+import wave
+import threading
+import queue
+import time
+from datetime import datetime
+import json
+
+class VoiceCommandProcessor:
+    def __init__(self, model_size="base"):
+        """Initialize the voice command processor."""
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Loading Whisper model on {self.device}...")
+        
+        # Load Whisper model
+        self.whisper_model = whisper.load_model(model_size, device=self.device)
+        
+        # Audio recording parameters
+        self.format = pyaudio.paInt16
+        self.channels = 1
+        self.rate = 16000
+        self.chunk = 1024
+        self.record_seconds = 5
+        
+        # Initialize PyAudio
+        self.audio = pyaudio.PyAudio()
+        
+        # Wake word detection (simple keyword spotting)
+        self.wake_words = ["robot", "hey robot", "please robot", "listen robot"]
+        
+        # Command validation
+        self.prohibited_actions = ["harm", "damage", "destroy", "attack", "kill", "break"]
+        
+        # Store recent commands to detect repetitions
+        self.recent_commands = []
+        self.max_recent_commands = 5
+        
+        print("Voice command processor initialized successfully!")
+    
+    def record_audio(self, duration=5):
+        """Record audio from microphone."""
+        print(f"Recording for {duration} seconds...")
+        
+        stream = self.audio.open(
+            format=self.format,
+            channels=self.channels,
+            rate=self.rate,
+            input=True,
+            frames_per_buffer=self.chunk
+        )
+        
+        frames = []
+        
+        for i in range(0, int(self.rate / self.chunk * duration)):
+            data = stream.read(self.chunk)
+            frames.append(data)
+        
+        print("Recording finished.")
+        
+        stream.stop_stream()
+        stream.close()
+        
+        # Save to a temporary WAV file
+        temp_filename = f"temp_recording_{int(time.time())}.wav"
+        wf = wave.open(temp_filename, 'wb')
+        wf.setnchannels(self.channels)
+        wf.setsampwidth(self.audio.get_sample_size(self.format))
+        wf.setframerate(self.rate)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+        
+        return temp_filename
+    
+    def transcribe_audio(self, audio_path):
+        """Transcribe audio file using Whisper."""
+        result = self.whisper_model.transcribe(audio_path)
+        return result["text"].strip()
+    
+    def detect_wake_word(self, audio_path):
+        """Detect if a wake word is present in the audio."""
+        transcribed_text = self.transcribe_audio(audio_path)
+        transcribed_lower = transcribed_text.lower()
+        
+        for wake_word in self.wake_words:
+            if wake_word in transcribed_lower:
+                return True, transcribed_text
+        
+        return False, transcribed_text
+    
+    def validate_command(self, command_text):
+        """Validate command for safety and appropriateness."""
+        command_lower = command_text.lower()
+        
+        # Check for prohibited actions
+        for action in self.prohibited_actions:
+            if action in command_lower:
+                return False, f"Command contains prohibited action: {action}"
+        
+        # Check for potentially unsafe commands
+        if "fire" in command_lower or "emergency" in command_lower:
+            return False, "Potential emergency situation detected"
+        
+        # Check for repetitive commands (possible malfunction)
+        if command_text in self.recent_commands:
+            return False, "Command repetition detected"
+        
+        return True, "Valid command"
+    
+    def process_voice_command(self, duration=5):
+        """Complete pipeline: record, detect wake word, transcribe, validate."""
+        # Record audio
+        audio_file = self.record_audio(duration)
+        
+        # Detect wake word
+        wake_detected, full_transcription = self.detect_wake_word(audio_file)
+        
+        if not wake_detected:
+            # Clean up temp file
+            if os.path.exists(audio_file):
+                os.remove(audio_file)
+            return {"wake_detected": False, "command": "", "valid": False, "message": "No wake word detected"}
+        
+        # Extract command part (everything after the wake word)
+        command_text = full_transcription
+        for wake_word in self.wake_words:
+            if wake_word in full_transcription.lower():
+                # Extract everything after the wake word
+                idx = full_transcription.lower().find(wake_word) + len(wake_word)
+                command_text = full_transcription[idx:].strip()
+                break
+        
+        if not command_text:
+            # Clean up temp file
+            if os.path.exists(audio_file):
+                os.remove(audio_file)
+            return {"wake_detected": True, "command": "", "valid": False, "message": "No command found after wake word"}
+        
+        # Validate command
+        is_valid, validation_message = self.validate_command(command_text)
+        
+        # Add to recent commands
+        self.recent_commands.append(command_text)
+        if len(self.recent_commands) > self.max_recent_commands:
+            self.recent_commands.pop(0)
+        
+        # Clean up temp file
+        if os.path.exists(audio_file):
+            os.remove(audio_file)
+        
+        return {
+            "wake_detected": True,
+            "command": command_text,
+            "valid": is_valid,
+            "message": validation_message,
+            "full_transcription": full_transcription
+        }
+    
+    def continuous_listening(self, callback_func, timeout=30):
+        """Continuously listen for voice commands."""
+        print(f"Starting continuous listening (timeout: {timeout}s)...")
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            try:
+                result = self.process_voice_command(duration=3)  # Shorter duration for continuous listening
+                
+                if result["wake_detected"]:
+                    print(f"Wake word detected: '{result['command']}'")
+                    
+                    # Call the callback function with the result
+                    callback_func(result)
+                
+                time.sleep(0.5)  # Small delay between recordings
+                
+            except KeyboardInterrupt:
+                print("Stopping continuous listening...")
+                break
+    
+    def cleanup(self):
+        """Clean up resources."""
+        self.audio.terminate()
+
+def command_callback(result):
+    """Callback function for processing recognized commands."""
+    if result["valid"]:
+        print(f"Executing command: {result['command']}")
+        # Here you would integrate with your action planning system
+    else:
+        print(f"Invalid command: {result['command']} - {result['message']}")
+
+def main():
+    # Initialize the voice command processor
+    processor = VoiceCommandProcessor()
+    
+    try:
+        # Test single command processing
+        print("Testing single command processing...")
+        result = processor.process_voice_command(duration=5)
+        print(f"Result: {result}")
+        
+        # Uncomment the following lines to test continuous listening
+        # print("\nStarting continuous listening for 30 seconds...")
+        # processor.continuous_listening(command_callback, timeout=30)
+        
+    except KeyboardInterrupt:
+        print("Interrupted by user")
+    finally:
+        processor.cleanup()
+
+if __name__ == "__main__":
+    main()
+```
+
+## Step 3: Creating a Complete Voice-to-Intent Pipeline
+
+Let's create a complete pipeline that integrates Whisper with intent classification and action planning:
+
+### Complete Voice-to-Intent Pipeline:
+```python
+import whisper
+import torch
+import numpy as np
+import pyaudio
+import wave
+import threading
+import queue
+import time
+import json
+import re
+from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.pipeline import Pipeline as SklearnPipeline
+
+class VoiceToIntentPipeline:
+    def __init__(self, model_size="base"):
+        """Initialize the complete voice-to-intent pipeline."""
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Loading models on {self.device}...")
+        
+        # Load Whisper model
+        self.whisper_model = whisper.load_model(model_size, device=self.device)
+        
+        # Initialize intent classifier
+        self.intent_classifier = self._initialize_intent_classifier()
+        
+        # Initialize entity extractor
+        self.entity_extractor = self._initialize_entity_extractor()
+        
+        # Audio recording parameters
+        self.format = pyaudio.paInt16
+        self.channels = 1
+        self.rate = 16000
+        self.chunk = 1024
+        
+        # Initialize PyAudio
+        self.audio = pyaudio.PyAudio()
+        
+        # Wake word detection
+        self.wake_words = ["robot", "hey robot", "please robot", "listen robot"]
+        
+        # Safety validation
+        self.safety_checker = SafetyChecker()
+        
+        print("Voice-to-intent pipeline initialized successfully!")
+    
+    def _initialize_intent_classifier(self):
+        """Initialize intent classification model."""
+        # For this example, we'll use a simple scikit-learn model
+        # In practice, you might use a more sophisticated model
+        
+        # Sample training data (in a real implementation, you'd have a larger dataset)
+        training_texts = [
+            "go to the kitchen", "move to the living room", "navigate to the bedroom",
+            "pick up the red cup", "grab the book", "take the pen", "lift the box",
+            "what can you do", "tell me about yourself", "introduce yourself",
+            "stop moving", "halt", "freeze", "cease activity",
+            "open the door", "close the window", "turn on the light", "switch off the lamp"
+        ]
+        
+        training_labels = [
+            "navigation", "navigation", "navigation",
+            "manipulation", "manipulation", "manipulation", "manipulation",
+            "information", "information", "information",
+            "stop", "stop", "stop", "stop",
+            "manipulation", "manipulation", "manipulation", "manipulation"
+        ]
+        
+        # Create a simple classification pipeline
+        self.tfidf = TfidfVectorizer(lowercase=True, stop_words='english')
+        self.classifier = MultinomialNB()
+        
+        # Train the classifier
+        X_train = self.tfidf.fit_transform(training_texts)
+        self.classifier.fit(X_train, training_labels)
+        
+        return self.classifier
+    
+    def _initialize_entity_extractor(self):
+        """Initialize entity extraction."""
+        # Define patterns for common entities
+        self.entity_patterns = {
+            "location": [
+                r"kitchen", r"living room", r"bedroom", r"office", r"bathroom", 
+                r"garden", r"hallway", r"dining room", r"garage"
+            ],
+            "object": [
+                r"cup", r"book", r"pen", r"box", r"bottle", r"phone", 
+                r"keys", r"wallet", r"hat", r"glasses"
+            ],
+            "color": [
+                r"red", r"blue", r"green", r"yellow", r"black", r"white", 
+                r"purple", r"orange", r"pink", r"brown"
+            ]
+        }
+        return self.entity_patterns
+    
+    def extract_entities(self, text):
+        """Extract entities from text based on patterns."""
+        entities = {}
+        
+        for entity_type, patterns in self.entity_patterns.items():
+            found_entities = []
+            for pattern in patterns:
+                matches = re.findall(r'\b' + pattern + r'\b', text.lower())
+                found_entities.extend(matches)
+            if found_entities:
+                entities[entity_type] = list(set(found_entities))  # Remove duplicates
+        
+        return entities
+    
+    def classify_intent(self, text):
+        """Classify the intent of the text."""
+        # Transform text using TF-IDF
+        X = self.tfidf.transform([text])
+        
+        # Predict intent
+        predicted_intent = self.classifier.predict(X)[0]
+        confidence = max(self.classifier.predict_proba(X)[0])
+        
+        return predicted_intent, confidence
+    
+    def record_audio(self, duration=5):
+        """Record audio from microphone."""
+        print(f"Recording for {duration} seconds...")
+        
+        stream = self.audio.open(
+            format=self.format,
+            channels=self.channels,
+            rate=self.rate,
+            input=True,
+            frames_per_buffer=self.chunk
+        )
+        
+        frames = []
+        
+        for i in range(0, int(self.rate / self.chunk * duration)):
+            data = stream.read(self.chunk)
+            frames.append(data)
+        
+        print("Recording finished.")
+        
+        stream.stop_stream()
+        stream.close()
+        
+        # Save to a temporary WAV file
+        temp_filename = f"temp_recording_{int(time.time())}.wav"
+        wf = wave.open(temp_filename, 'wb')
+        wf.setnchannels(self.channels)
+        wf.setsampwidth(self.audio.get_sample_size(self.format))
+        wf.setframerate(self.rate)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+        
+        return temp_filename
+    
+    def transcribe_audio(self, audio_path):
+        """Transcribe audio file using Whisper."""
+        result = self.whisper_model.transcribe(audio_path)
+        return result["text"].strip()
+    
+    def process_voice_command(self, duration=5):
+        """Complete pipeline: record, transcribe, classify intent, extract entities."""
+        # Record audio
+        audio_file = self.record_audio(duration)
+        
+        # Transcribe audio
+        transcribed_text = self.transcribe_audio(audio_file)
+        
+        if not transcribed_text:
+            # Clean up temp file
+            if os.path.exists(audio_file):
+                os.remove(audio_file)
+            return {
+                "success": False,
+                "message": "Could not transcribe audio",
+                "raw_text": "",
+                "intent": None,
+                "entities": {},
+                "confidence": 0.0
+            }
+        
+        # Classify intent
+        intent, confidence = self.classify_intent(transcribed_text)
+        
+        # Extract entities
+        entities = self.extract_entities(transcribed_text)
+        
+        # Validate for safety
+        safety_check = self.safety_checker.check_command(transcribed_text)
+        
+        # Clean up temp file
+        if os.path.exists(audio_file):
+            os.remove(audio_file)
+        
+        return {
+            "success": True,
+            "raw_text": transcribed_text,
+            "processed_text": transcribed_text.lower(),
+            "intent": intent,
+            "entities": entities,
+            "confidence": float(confidence),
+            "safe": safety_check["safe"],
+            "safety_issues": safety_check["issues"]
+        }
+    
+    def parse_command_structure(self, result):
+        """Parse the command structure for action planning."""
+        if not result["success"] or not result["safe"]:
+            return None
+        
+        command_structure = {
+            "intent": result["intent"],
+            "entities": result["entities"],
+            "raw_command": result["raw_text"],
+            "confidence": result["confidence"],
+            "actions": []
+        }
+        
+        # Map intents to specific actions
+        if result["intent"] == "navigation":
+            command_structure["actions"].append({
+                "type": "navigate",
+                "destination": result["entities"].get("location", ["unknown"])[0] if "location" in result["entities"] else "unknown"
+            })
+        elif result["intent"] == "manipulation":
+            command_structure["actions"].append({
+                "type": "manipulate",
+                "object": result["entities"].get("object", ["unknown"])[0] if "object" in result["entities"] else "unknown",
+                "color": result["entities"].get("color", ["any"])[0] if "color" in result["entities"] else "any"
+            })
+        elif result["intent"] == "stop":
+            command_structure["actions"].append({
+                "type": "stop"
+            })
+        elif result["intent"] == "information":
+            command_structure["actions"].append({
+                "type": "respond",
+                "response": "I am a VLA-enabled robot. How can I assist you?"
+            })
+        
+        return command_structure
+    
+    def cleanup(self):
+        """Clean up resources."""
+        self.audio.terminate()
+
+class SafetyChecker:
+    """Safety checker for voice commands."""
+    
+    def __init__(self):
+        self.prohibited_terms = [
+            "harm", "damage", "destroy", "attack", "kill", "break", 
+            "steal", "hurt", "fight", "violence", "dangerous"
+        ]
+        self.emergency_terms = [
+            "fire", "emergency", "help", "accident", "medical", 
+            "injury", "danger", "urgent"
+        ]
+    
+    def check_command(self, command_text):
+        """Check if a command is safe to execute."""
+        command_lower = command_text.lower()
+        
+        issues = []
+        
+        # Check for prohibited terms
+        for term in self.prohibited_terms:
+            if term in command_lower:
+                issues.append(f"Prohibited term detected: {term}")
+        
+        # Check for emergency terms
+        for term in self.emergency_terms:
+            if term in command_lower:
+                issues.append(f"Emergency term detected: {term}")
+        
+        # Check for commands that might be unsafe
+        if "behind me" in command_lower or "behind" in command_lower:
+            issues.append("Command might involve unsafe movement")
+        
+        is_safe = len(issues) == 0
+        
+        return {
+            "safe": is_safe,
+            "issues": issues
+        }
+
+def main():
+    # Initialize the voice-to-intent pipeline
+    pipeline = VoiceToIntentPipeline()
+    
+    try:
+        # Test the pipeline
+        print("Testing voice-to-intent pipeline...")
+        result = pipeline.process_voice_command(duration=5)
+        
+        print(f"\nRaw transcription: {result['raw_text']}")
+        print(f"Intent: {result['intent']} (confidence: {result['confidence']:.2f})")
+        print(f"Entities: {result['entities']}")
+        print(f"Safe to execute: {result['safe']}")
+        
+        if result['safe']:
+            command_structure = pipeline.parse_command_structure(result)
+            if command_structure:
+                print(f"Command structure: {json.dumps(command_structure, indent=2)}")
+        
+    except KeyboardInterrupt:
+        print("Interrupted by user")
+    finally:
+        pipeline.cleanup()
+
+if __name__ == "__main__":
+    main()
+```
+
+## Step 4: Integrating with ROS 2
+
+Now let's create a ROS 2 node that implements our voice processing pipeline:
+
+### ROS 2 Voice Processing Node:
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from sensor_msgs.msg import AudioData
+from geometry_msgs.msg import Twist
+from .voice_to_intent_pipeline import VoiceToIntentPipeline
+import threading
+import time
+
+class VLAVoiceNode(Node):
+    def __init__(self):
+        super().__init__('vla_voice_node')
+        
+        # Initialize voice processing pipeline
+        self.voice_pipeline = VoiceToIntentPipeline()
+        
+        # Create publisher for robot commands
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        
+        # Create publisher for voice processing status
+        self.status_pub = self.create_publisher(String, '/voice_status', 10)
+        
+        # Create publisher for parsed commands
+        self.command_pub = self.create_publisher(String, '/parsed_command', 10)
+        
+        # Timer for continuous listening
+        self.listen_timer = self.create_timer(0.1, self.continuous_listen_callback)
+        
+        # Thread for voice processing
+        self.listening_thread = None
+        self.should_listen = False
+        
+        # Robot state
+        self.robot_moving = False
+        
+        self.get_logger().info('VLA Voice Node initialized')
+
+    def continuous_listen_callback(self):
+        """Callback for continuous listening."""
+        if not self.should_listen:
+            return
+        
+        # Process voice command in a separate thread to avoid blocking
+        if not self.listening_thread or not self.listening_thread.is_alive():
+            self.listening_thread = threading.Thread(target=self.process_voice_command_thread)
+            self.listening_thread.start()
+
+    def process_voice_command_thread(self):
+        """Process voice command in a separate thread."""
+        try:
+            # Process voice command
+            result = self.voice_pipeline.process_voice_command(duration=3)
+            
+            # Publish status
+            status_msg = String()
+            if result['success']:
+                status_msg.data = f"Processed: {result['raw_text'][:50]}..."
+            else:
+                status_msg.data = f"Failed: {result['message']}"
+            self.status_pub.publish(status_msg)
+            
+            if result['success'] and result['safe']:
+                # Parse command structure
+                command_structure = self.voice_pipeline.parse_command_structure(result)
+                
+                if command_structure:
+                    # Publish parsed command
+                    command_msg = String()
+                    command_msg.data = str(command_structure)
+                    self.command_pub.publish(command_msg)
+                    
+                    # Execute command
+                    self.execute_command(command_structure)
+            else:
+                self.get_logger().warn(f"Unsafe or invalid command: {result.get('raw_text', 'N/A')}")
+                
+        except Exception as e:
+            self.get_logger().error(f'Error processing voice command: {str(e)}')
+
+    def execute_command(self, command_structure):
+        """Execute the parsed command."""
+        for action in command_structure['actions']:
+            action_type = action['type']
+            
+            if action_type == 'navigate':
+                self.execute_navigation(action)
+            elif action_type == 'manipulate':
+                self.execute_manipulation(action)
+            elif action_type == 'stop':
+                self.execute_stop()
+            elif action_type == 'respond':
+                self.execute_response(action)
+
+    def execute_navigation(self, action):
+        """Execute navigation command."""
+        destination = action.get('destination', 'unknown')
+        self.get_logger().info(f"Navigating to {destination}")
+        
+        # In a real implementation, this would send navigation goals
+        # For now, we'll simulate with movement commands
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.5  # Move forward
+        cmd_vel.angular.z = 0.0  # No turning
+        
+        # Publish command for 2 seconds
+        start_time = time.time()
+        while time.time() - start_time < 2.0:
+            self.cmd_vel_pub.publish(cmd_vel)
+            time.sleep(0.1)
+        
+        # Stop robot
+        stop_cmd = Twist()
+        self.cmd_vel_pub.publish(stop_cmd)
+
+    def execute_manipulation(self, action):
+        """Execute manipulation command."""
+        obj = action.get('object', 'unknown')
+        color = action.get('color', 'any')
+        self.get_logger().info(f"Manipulating {color} {obj}")
+        
+        # In a real implementation, this would send manipulation commands
+        # For now, we'll just log the action
+        pass
+
+    def execute_stop(self):
+        """Execute stop command."""
+        self.get_logger().info("Stopping robot")
+        
+        # Stop robot
+        cmd_vel = Twist()
+        self.cmd_vel_pub.publish(cmd_vel)
+
+    def execute_response(self, action):
+        """Execute response command."""
+        response = action.get('response', 'Affirmative.')
+        self.get_logger().info(f"Response: {response}")
+        
+        # In a real implementation, this would trigger speech synthesis
+        # For now, we'll just log the response
+        pass
+
+    def start_listening(self):
+        """Start continuous listening."""
+        self.should_listen = True
+        self.get_logger().info("Started listening for voice commands")
+
+    def stop_listening(self):
+        """Stop continuous listening."""
+        self.should_listen = False
+        self.get_logger().info("Stopped listening for voice commands")
+
+def main(args=None):
+    rclpy.init(args=args)
+    
+    voice_node = VLAVoiceNode()
+    
+    # Start listening
+    voice_node.start_listening()
+    
+    try:
+        rclpy.spin(voice_node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        voice_node.stop_listening()
+        voice_node.voice_pipeline.cleanup()
+        voice_node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+## Step 5: Testing the Voice Processing System
+
+Let's create a test script to validate our voice processing system:
+
+### Voice Processing Test:
+```python
+import os
+import sys
+import time
+import numpy as np
+from voice_to_intent_pipeline import VoiceToIntentPipeline
+from voice_command_processor import VoiceCommandProcessor
+
+def test_whisper_transcription():
+    """Test Whisper transcription capabilities."""
+    print("Testing Whisper transcription...")
+    
+    # Initialize processor
+    processor = VoiceToIntentPipeline()
+    
+    # Test with a sample text (in a real scenario, you'd test with actual audio)
+    # For this example, we'll simulate by directly testing the NLP components
+    
+    test_sentences = [
+        "Go to the kitchen",
+        "Pick up the red cup",
+        "Stop moving immediately",
+        "Tell me about yourself"
+    ]
+    
+    for sentence in test_sentences:
+        # Simulate transcription result
+        result = {
+            "success": True,
+            "raw_text": sentence,
+            "processed_text": sentence.lower(),
+        }
+        
+        # Test intent classification
+        intent, confidence = processor.classify_intent(sentence)
+        print(f"Sentence: '{sentence}' -> Intent: {intent} (confidence: {confidence:.2f})")
+        
+        # Test entity extraction
+        entities = processor.extract_entities(sentence)
+        print(f"Entities: {entities}")
+    
+    processor.cleanup()
+    print("Whisper transcription test completed.\n")
+
+def test_voice_command_processing():
+    """Test voice command processing pipeline."""
+    print("Testing voice command processing...")
+    
+    # Initialize processor
+    processor = VoiceCommandProcessor()
+    
+    # Test wake word detection (simulated)
+    print("Testing wake word detection...")
+    
+    test_phrases = [
+        "Hey robot, go to the kitchen",
+        "Please robot, pick up the blue bottle",
+        "Listen robot, stop immediately",
+        "What's the weather like?",
+        "Robot, tell me a joke"
+    ]
+    
+    for phrase in test_phrases:
+        # Simulate the processing
+        has_wake_word = any(wake_word in phrase.lower() for wake_word in processor.wake_words)
+        print(f"'{phrase}' -> Has wake word: {has_wake_word}")
+        
+        if has_wake_word:
+            # Extract command part
+            command_part = phrase
+            for wake_word in processor.wake_words:
+                if wake_word in phrase.lower():
+                    idx = phrase.lower().find(wake_word) + len(wake_word)
+                    command_part = phrase[idx:].strip()
+                    break
+            print(f"  Command part: '{command_part}'")
+            
+            # Validate command
+            is_valid, msg = processor.validate_command(command_part)
+            print(f"  Valid: {is_valid} - {msg}")
+    
+    processor.cleanup()
+    print("Voice command processing test completed.\n")
+
+def test_complete_pipeline():
+    """Test the complete voice-to-intent pipeline."""
+    print("Testing complete voice-to-intent pipeline...")
+    
+    # Initialize pipeline
+    pipeline = VoiceToIntentPipeline()
+    
+    # Test sentences
+    test_commands = [
+        "Robot, go to the kitchen",
+        "Please robot, pick up the red cup",
+        "Hey robot, stop moving",
+        "Robot, tell me about yourself"
+    ]
+    
+    for command in test_commands:
+        print(f"\nProcessing: '{command}'")
+        
+        # Simulate the processing (since we can't record audio in this test)
+        # In a real scenario, this would come from voice processing
+        result = {
+            "success": True,
+            "raw_text": command,
+            "processed_text": command.lower(),
+        }
+        
+        # Classify intent
+        intent, confidence = pipeline.classify_intent(command)
+        result["intent"] = intent
+        result["confidence"] = confidence
+        
+        # Extract entities
+        entities = pipeline.extract_entities(command)
+        result["entities"] = entities
+        
+        # Check safety
+        from voice_to_intent_pipeline import SafetyChecker
+        safety_checker = SafetyChecker()
+        safety_check = safety_checker.check_command(command)
+        result["safe"] = safety_check["safe"]
+        result["safety_issues"] = safety_check["issues"]
+        
+        print(f"  Intent: {result['intent']} (confidence: {result['confidence']:.2f})")
+        print(f"  Entities: {result['entities']}")
+        print(f"  Safe: {result['safe']}")
+        
+        if result['safe']:
+            command_structure = pipeline.parse_command_structure(result)
+            if command_structure:
+                print(f"  Command structure: {command_structure}")
+    
+    pipeline.cleanup()
+    print("\nComplete pipeline test completed.\n")
+
+def main():
+    print("Starting Voice Processing System Tests...\n")
+    
+    test_whisper_transcription()
+    test_voice_command_processing()
+    test_complete_pipeline()
+    
+    print("All voice processing system tests completed!")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Step 6: Running the Voice Processing System
+
+1. First, run the basic voice processing test:
+   ```bash
+   python voice_test.py
+   ```
+
+2. To run the complete voice pipeline (with microphone access):
+   ```bash
+   python voice_to_intent_pipeline.py
+   ```
+
+3. To run the ROS 2 node (after setting up ROS 2):
+   ```bash
+   ros2 run your_package_name vla_voice_node
+   ```
+
+## Step 7: Evaluating Performance
+
+Monitor the performance of your voice processing system:
+
+1. Check transcription accuracy with a test dataset:
+   ```python
+   # Example evaluation code
+   import whisper
+   import jiwer  # For calculating word error rate
+   
+   # Load Whisper model
+   model = whisper.load_model("base")
+   
+   # Test on a set of audio files with known transcriptions
+   test_data = [
+       {"audio_path": "path/to/audio1.wav", "expected": "Go to the kitchen"},
+       {"audio_path": "path/to/audio2.wav", "expected": "Pick up the red cup"},
+       # Add more test samples
+   ]
+   
+   total_error_rate = 0
+   for sample in test_data:
+       result = model.transcribe(sample["audio_path"])
+       transcription = result["text"]
+       
+       # Calculate Word Error Rate (WER)
+       error_rate = jiwer.wer(sample["expected"], transcription)
+       total_error_rate += error_rate
+       print(f"Expected: {sample['expected']}")
+       print(f"Transcribed: {transcription}")
+       print(f"WER: {error_rate:.2f}\n")
+   
+   avg_error_rate = total_error_rate / len(test_data)
+   print(f"Average WER: {avg_error_rate:.2f}")
+   ```
+
+2. Evaluate intent classification accuracy:
+   ```python
+   # Example intent classification evaluation
+   from sklearn.metrics import classification_report, accuracy_score
+   
+   # Test data with expected intents
+   test_samples = [
+       {"text": "go to the kitchen", "expected_intent": "navigation"},
+       {"text": "pick up the red cup", "expected_intent": "manipulation"},
+       {"text": "stop moving", "expected_intent": "stop"},
+       # Add more samples
+   ]
+   
+   pipeline = VoiceToIntentPipeline()
+   y_true = []
+   y_pred = []
+   
+   for sample in test_samples:
+       intent, _ = pipeline.classify_intent(sample["text"])
+       y_true.append(sample["expected_intent"])
+       y_pred.append(intent)
+   
+   # Calculate accuracy
+   accuracy = accuracy_score(y_true, y_pred)
+   print(f"Intent classification accuracy: {accuracy:.2f}")
+   
+   # Detailed report
+   print("\nClassification Report:")
+   print(classification_report(y_true, y_pred))
+   
+   pipeline.cleanup()
+   ```
+
+## Lab Summary
+
+In this lab, you:
+- Implemented OpenAI Whisper for speech recognition
+- Created a voice command processing system with wake word detection
+- Developed a complete voice-to-intent pipeline with safety validation
+- Integrated the voice system with ROS 2 for robotic applications
+- Tested and evaluated the performance of your voice processing system
+
+## Troubleshooting Tips
+
+1. If Whisper installation fails, try installing with conda: `conda install -c conda-forge openai-whisper`
+2. If you get audio recording errors, check microphone permissions and availability
+3. If transcription is inaccurate, try using a larger Whisper model (e.g., "medium" or "large")
+4. If the system is too sensitive to background noise, implement audio preprocessing filters
+
+## Next Steps
+
+In the next lab, you'll implement action execution and control systems that translate the interpreted language commands into actual robotic behaviors, completing the full VLA pipeline.

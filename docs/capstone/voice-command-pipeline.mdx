@@ -1,0 +1,425 @@
+---
+title: "Voice Command Pipeline"
+sidebar_label: "Voice Command Pipeline"
+---
+
+# Voice Command Pipeline
+
+## Overview
+
+The voice command pipeline enables natural human-robot interaction by converting spoken commands into structured instructions that the autonomous humanoid can understand and execute. This system leverages OpenAI Whisper for speech-to-text conversion and integrates with the LLM-based cognitive planner to interpret commands in context.
+
+## Architecture
+
+The voice command pipeline consists of several interconnected components:
+
+````mermaid
+graph TB
+    A[Microphone Input] --> B[Audio Preprocessing & Noise Reduction]
+    B --> C[OpenAI Whisper: Speech-to-Text]
+    C --> D[Transcribed Text]
+    D --> E[Command Validation & Filtering]
+    E --> F[LLM Cognitive Planner]
+    F --> G[Structured ROS 2 Action Sequence]
+    G --> H[Robot Execution Module]
+    H --> I[Feedback: Updated Robot State]
+    I --> F
+
+    subgraph Noise Sources
+        N1[Background Noise]
+        N2[Other Voices]
+        N3[Echo/Reverb]
+    end
+    N1 & N2 & N3 -->|Interference| B
+
+    style A fill:#a8dadc,stroke:#1d3557
+    style C fill:#f1c40f,stroke:#1d3557
+    style F fill:#e76f51,stroke:#1d3557
+    style G fill:#2a9d8f,stroke:#1d3557
+    ````
+
+## Component Breakdown
+
+### 1. Audio Input and Preprocessing
+
+The audio input component captures voice commands and prepares them for processing.
+
+#### Key Features:
+- **Real-time audio capture**: Continuous monitoring for voice commands
+- **Noise reduction**: Filtering of background noise and environmental sounds
+- **Audio normalization**: Adjustment of volume levels for consistent processing
+- **Voice activity detection**: Detection of when a user is speaking
+
+#### Implementation:
+```python
+import rospy
+import pyaudio
+import numpy as np
+from scipy import signal
+
+class AudioPreprocessor:
+    def __init__(self):
+        # Initialize audio stream parameters
+        self.rate = 16000  # Sample rate
+        self.chunk = 1024  # Buffer size
+        self.format = pyaudio.paInt16
+        self.channels = 1
+        
+        # Initialize noise reduction filters
+        self.noise_threshold = 0.01
+        self.voice_activity_threshold = 0.05
+        
+    def preprocess_audio(self, audio_data):
+        # Apply noise reduction
+        filtered_audio = self.apply_noise_reduction(audio_data)
+        
+        # Normalize audio levels
+        normalized_audio = self.normalize_audio(filtered_audio)
+        
+        # Detect voice activity
+        if self.is_voice_active(normalized_audio):
+            return normalized_audio
+        return None
+    
+    def apply_noise_reduction(self, audio_data):
+        # Apply spectral subtraction for noise reduction
+        # Implementation details...
+        return audio_data
+    
+    def normalize_audio(self, audio_data):
+        # Normalize audio to consistent level
+        # Implementation details...
+        return audio_data
+    
+    def is_voice_active(self, audio_data):
+        # Determine if audio contains voice activity
+        # Implementation details...
+        return True
+```
+
+### 2. Speech-to-Text with OpenAI Whisper
+
+The core of the voice command pipeline is OpenAI Whisper, which converts speech to text with high accuracy.
+
+#### Key Features:
+- **Multilingual support**: Recognition of commands in multiple languages
+- **Robustness**: Performance in noisy environments
+- **Real-time processing**: Low-latency conversion for responsive interaction
+- **Custom vocabulary**: Ability to recognize domain-specific terms
+
+#### Implementation:
+```python
+import whisper
+import torch
+import rospy
+from std_msgs.msg import String
+
+class WhisperSTT:
+    def __init__(self, model_size="base"):
+        # Load Whisper model
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = whisper.load_model(model_size).to(self.device)
+        
+        # ROS publisher for recognized text
+        self.text_pub = rospy.Publisher('/voice_commands', String, queue_size=10)
+        
+    def transcribe_audio(self, audio_data):
+        # Convert audio data to format expected by Whisper
+        audio_tensor = self.preprocess_for_whisper(audio_data)
+        
+        # Perform transcription
+        result = self.model.transcribe(audio_tensor)
+        
+        # Extract text and confidence
+        text = result["text"]
+        confidence = result.get("avg_logprob", 0.0)
+        
+        return text, confidence
+    
+    def preprocess_for_whisper(self, audio_data):
+        # Convert audio to format required by Whisper
+        # Implementation details...
+        return audio_data
+```
+
+### 3. Command Validation and Filtering
+
+Before sending commands to the cognitive planner, they must be validated to ensure they are appropriate and safe.
+
+#### Key Features:
+- **Command format validation**: Ensuring commands follow expected patterns
+- **Safety filtering**: Blocking potentially dangerous commands
+- **Context validation**: Verifying commands make sense in current context
+- **Spam protection**: Preventing rapid-fire command execution
+
+#### Implementation:
+```python
+import re
+from typing import List, Dict
+
+class CommandValidator:
+    def __init__(self):
+        # Define safe command patterns
+        self.safe_patterns = [
+            r"move to (.+)",
+            r"go to (.+)",
+            r"pick up (.+)",
+            r"grasp (.+)",
+            r"place (.+) on (.+)",
+            r"clean (.+)",
+            r"find (.+)",
+            r"bring (.+) to (.+)"
+        ]
+        
+        # Define dangerous command patterns to block
+        self.dangerous_patterns = [
+            r"shutdown",
+            r"self-destruct",
+            r"emergency stop",
+            r"disable safety"
+        ]
+        
+    def validate_command(self, command_text: str, robot_state: Dict) -> bool:
+        # Check for dangerous patterns
+        for pattern in self.dangerous_patterns:
+            if re.search(pattern, command_text, re.IGNORECASE):
+                return False
+        
+        # Check if command matches safe patterns
+        for pattern in self.safe_patterns:
+            if re.match(pattern, command_text, re.IGNORECASE):
+                return True
+        
+        # Additional context validation
+        return self.validate_context(command_text, robot_state)
+    
+    def validate_context(self, command_text: str, robot_state: Dict) -> bool:
+        # Validate command against current robot state
+        # Implementation details...
+        return True
+```
+
+### 4. Contextual Understanding
+
+The system enhances raw transcriptions with contextual information to improve understanding.
+
+#### Key Features:
+- **Entity recognition**: Identifying objects, locations, and actions in commands
+- **Context awareness**: Using robot state and environment information
+- **Ambiguity resolution**: Clarifying ambiguous commands through dialogue
+- **Command history**: Using previous interactions to inform understanding
+
+#### Implementation:
+```python
+import spacy
+from typing import Dict, List, Tuple
+
+class ContextualUnderstanding:
+    def __init__(self):
+        # Load spaCy model for NLP
+        self.nlp = spacy.load("en_core_web_sm")
+        
+    def extract_entities(self, command_text: str) -> Dict[str, List[str]]:
+        # Extract named entities from command
+        doc = self.nlp(command_text)
+        
+        entities = {
+            "objects": [],
+            "locations": [],
+            "actions": [],
+            "people": []
+        }
+        
+        for ent in doc.ents:
+            if ent.label_ in ["OBJECT", "PRODUCT"]:
+                entities["objects"].append(ent.text)
+            elif ent.label_ in ["GPE", "LOC", "FAC"]:
+                entities["locations"].append(ent.text)
+            elif ent.label_ == "PERSON":
+                entities["people"].append(ent.text)
+        
+        # Extract actions using verb detection
+        for token in doc:
+            if token.pos_ == "VERB":
+                entities["actions"].append(token.lemma_)
+        
+        return entities
+    
+    def contextualize_command(self, command_text: str, robot_state: Dict, 
+                             environment_map: Dict) -> Dict:
+        # Enhance command with contextual information
+        entities = self.extract_entities(command_text)
+        
+        # Resolve ambiguous references using context
+        resolved_command = self.resolve_ambiguities(
+            command_text, entities, robot_state, environment_map
+        )
+        
+        return {
+            "original": command_text,
+            "resolved": resolved_command,
+            "entities": entities,
+            "context": {
+                "robot_position": robot_state.get("position"),
+                "detected_objects": environment_map.get("objects", []),
+                "available_actions": robot_state.get("available_actions", [])
+            }
+        }
+    
+    def resolve_ambiguities(self, command_text: str, entities: Dict, 
+                           robot_state: Dict, environment_map: Dict) -> str:
+        # Resolve ambiguous references in the command
+        # Implementation details...
+        return command_text
+```
+
+## Integration with ROS 2
+
+The voice command pipeline integrates with the ROS 2 ecosystem through publishers and subscribers:
+
+```python
+import rospy
+from std_msgs.msg import String
+from sensor_msgs.msg import AudioData
+from capstone_msgs.msg import VoiceCommand
+
+class VoiceCommandNode:
+    def __init__(self):
+        rospy.init_node('voice_command_pipeline')
+        
+        # Publishers
+        self.command_pub = rospy.Publisher('/structured_commands', VoiceCommand, queue_size=10)
+        self.status_pub = rospy.Publisher('/voice_pipeline_status', String, queue_size=10)
+        
+        # Subscribers
+        self.audio_sub = rospy.Subscriber('/audio_input', AudioData, self.audio_callback)
+        
+        # Initialize pipeline components
+        self.preprocessor = AudioPreprocessor()
+        self.stt = WhisperSTT()
+        self.validator = CommandValidator()
+        self.contextualizer = ContextualUnderstanding()
+        
+    def audio_callback(self, audio_msg):
+        # Process incoming audio data
+        try:
+            # Preprocess audio
+            processed_audio = self.preprocessor.preprocess_audio(audio_msg.data)
+            
+            if processed_audio is not None:
+                # Convert speech to text
+                text, confidence = self.stt.transcribe_audio(processed_audio)
+                
+                if confidence > -0.5:  # Threshold for acceptable confidence
+                    # Validate command
+                    if self.validator.validate_command(text, self.get_robot_state()):
+                        # Add contextual information
+                        contextualized = self.contextualizer.contextualize_command(
+                            text, self.get_robot_state(), self.get_environment_map()
+                        )
+                        
+                        # Publish structured command
+                        cmd_msg = VoiceCommand()
+                        cmd_msg.text = contextualized["resolved"]
+                        cmd_msg.entities = contextualized["entities"]
+                        cmd_msg.context = str(contextualized["context"])
+                        cmd_msg.confidence = confidence
+                        
+                        self.command_pub.publish(cmd_msg)
+                        
+                        rospy.loginfo(f"Command recognized: {text}")
+                    else:
+                        rospy.logwarn(f"Invalid command blocked: {text}")
+                else:
+                    rospy.loginfo("Low confidence transcription ignored")
+        except Exception as e:
+            rospy.logerr(f"Error in voice pipeline: {e}")
+    
+    def get_robot_state(self):
+        # Retrieve current robot state
+        # Implementation details...
+        return {}
+    
+    def get_environment_map(self):
+        # Retrieve current environment map
+        # Implementation details...
+        return {}
+```
+
+## Safety Considerations
+
+### Command Filtering
+- Implement strict validation to prevent execution of potentially dangerous commands
+- Use whitelisting of allowed commands rather than blacklisting dangerous ones
+- Include human-in-the-loop for sensitive operations
+
+### Privacy Protection
+- Process audio data locally when possible to protect user privacy
+- Implement data retention policies for any stored audio
+- Provide clear information about data usage to users
+
+### Error Handling
+- Gracefully handle Whisper model failures or unavailability
+- Provide feedback to users when commands are not understood
+- Implement fallback mechanisms for critical functions
+
+## Performance Optimization
+
+### Real-time Processing
+- Optimize Whisper model for real-time performance (consider smaller models for faster inference)
+- Implement audio buffering to handle variable processing times
+- Use asynchronous processing where possible
+
+### Resource Management
+- Monitor GPU and CPU usage during transcription
+- Implement model loading/unloading strategies for resource-constrained systems
+- Cache frequently used vocabulary or phrases
+
+## Testing and Validation
+
+### Unit Tests
+```python
+import unittest
+from unittest.mock import Mock, patch
+
+class TestVoiceCommandPipeline(unittest.TestCase):
+    def setUp(self):
+        self.pipeline = VoiceCommandNode()
+    
+    def test_command_validation(self):
+        # Test that valid commands pass validation
+        valid_commands = [
+            "Move to the kitchen",
+            "Pick up the red cup",
+            "Go to the table"
+        ]
+        
+        for cmd in valid_commands:
+            with self.subTest(cmd=cmd):
+                result = self.pipeline.validator.validate_command(cmd, {})
+                self.assertTrue(result)
+    
+    def test_dangerous_command_filtering(self):
+        # Test that dangerous commands are blocked
+        dangerous_commands = [
+            "Shutdown the system",
+            "Self-destruct",
+            "Disable safety protocols"
+        ]
+        
+        for cmd in dangerous_commands:
+            with self.subTest(cmd=cmd):
+                result = self.pipeline.validator.validate_command(cmd, {})
+                self.assertFalse(result)
+```
+
+### Integration Tests
+- Test end-to-end voice command processing
+- Validate command interpretation in different environmental conditions
+- Verify safety filtering mechanisms
+
+## Conclusion
+
+The voice command pipeline provides a robust foundation for natural human-robot interaction in the autonomous humanoid system. By leveraging OpenAI Whisper and implementing comprehensive validation and contextual understanding, the system can reliably interpret user commands while maintaining safety and security.
+
+Continue to the [LLM Planning](./llm-planning) section to learn about implementing the cognitive planning system that translates voice commands into executable robotic actions.

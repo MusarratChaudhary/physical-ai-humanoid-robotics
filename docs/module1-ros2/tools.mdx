@@ -1,0 +1,397 @@
+---
+title: ROS 2 Tools & Libraries
+sidebar_label: Tools & Libraries
+---
+
+# ROS 2 Tools & Libraries
+
+## Essential ROS 2 Tools
+
+ROS 2 provides a comprehensive set of tools for development, debugging, and visualization. These tools are essential for working effectively with ROS 2-based robotic systems.
+
+### 1. ros2 command-line interface
+
+The `ros2` command-line interface is the primary tool for interacting with ROS 2 systems. It provides commands for managing nodes, topics, services, and more.
+
+#### Common ros2 commands:
+
+```bash
+# List all active nodes
+ros2 node list
+
+# Get information about a specific node
+ros2 node info <node_name>
+
+# List all active topics
+ros2 topic list
+
+# Echo messages on a topic
+ros2 topic echo <topic_name> <msg_type>
+
+# Publish a message to a topic
+ros2 topic pub <topic_name> <msg_type> <values>
+
+# List all active services
+ros2 service list
+
+# Call a service
+ros2 service call <service_name> <srv_type> <request_values>
+
+# List all available actions
+ros2 action list
+
+# Send a goal to an action server
+ros2 action send_goal <action_name> <action_type> <goal_values>
+```
+
+### 2. rqt
+
+rqt is a Qt-based framework for GUI development and a set of GUI plugins for ROS. It provides visualization tools and debugging capabilities.
+
+#### Common rqt plugins:
+
+- **rqt_graph**: Visualizes the node graph
+- **rqt_plot**: Plots data from topics
+- **rqt_console**: Displays ROS logs
+- **rqt_bag**: Records and plays back ROS bags
+- **rqt_reconfigure**: Dynamically reconfigure node parameters
+
+```bash
+# Launch rqt with all plugins
+rqt
+
+# Launch specific rqt plugin
+rqt_graph
+```
+
+### 3. rviz2
+
+RViz2 is the 3D visualization tool for ROS 2. It's essential for visualizing robot models, sensor data, and planning results in humanoid robotics applications.
+
+#### Key features of RViz2:
+
+- Display robot models (URDF)
+- Visualize sensor data (laser scans, point clouds, images)
+- Show planning paths and trajectories
+- Display coordinate frames and transforms
+- Interactive markers for user interaction
+
+```bash
+# Launch RViz2
+rviz2
+```
+
+### 4. ros2 bag
+
+The `ros2 bag` tool allows you to record, replay, and analyze ROS 2 message data.
+
+```bash
+# Record all topics
+ros2 bag record -a
+
+# Record specific topics
+ros2 bag record /topic1 /topic2
+
+# Play back a recorded bag file
+ros2 bag play <bag_file_path>
+
+# List contents of a bag file
+ros2 bag info <bag_file_path>
+```
+
+### 5. ros2 launch
+
+The `ros2 launch` command is used to start multiple nodes with a single command using launch files.
+
+```bash
+# Launch a package with a specific launch file
+ros2 launch <package_name> <launch_file>.py
+
+# Launch with arguments
+ros2 launch <package_name> <launch_file>.py arg_name:=arg_value
+```
+
+### 6. ros2 run
+
+The `ros2 run` command is used to run a specific executable from a package.
+
+```bash
+# Run an executable from a package
+ros2 run <package_name> <executable_name>
+
+# Run with arguments
+ros2 run <package_name> <executable_name> --arg1 value1 --arg2 value2
+```
+
+## Development Tools
+
+### 1. colcon
+
+Colcon is the build system used in ROS 2. It's used to build packages and workspaces.
+
+```bash
+# Build all packages in the workspace
+colcon build
+
+# Build a specific package
+colcon build --packages-select <package_name>
+
+# Build with specific CMake arguments
+colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+# Build and run tests
+colcon build --packages-select <package_name> && colcon test --packages-select <package_name>
+```
+
+### 2. ament
+
+Ament is the package build system used in ROS 2. It provides tools for testing, linting, and packaging.
+
+```bash
+# Run tests for a package
+ament test <package_name>
+
+# Run specific linters
+ament_cppcheck <package_name>
+ament_cpplint <package_name>
+ament_flake8 <package_name>
+```
+
+## Debugging Tools
+
+### 1. ros2 doctor
+
+The `ros2 doctor` command checks the health of your ROS 2 installation and running systems.
+
+```bash
+# Check ROS 2 system health
+ros2 doctor
+
+# Check specific aspects
+ros2 doctor --report
+```
+
+### 2. GDB with ROS 2
+
+Debugging ROS 2 nodes with GDB requires special considerations due to the multi-process nature of ROS 2.
+
+```bash
+# Run a node with GDB
+gdb --args ros2 run <package_name> <executable_name>
+
+# Or use ros2 run with GDB
+ros2 run --prefix 'gdb -ex run --args' <package_name> <executable_name>
+```
+
+### 3. Valgrind for Memory Debugging
+
+```bash
+# Run with Valgrind for memory leak detection
+ros2 run --prefix 'valgrind --tool=memcheck --leak-check=full' <package_name> <executable_name>
+```
+
+## Key ROS 2 Libraries
+
+### 1. rclpy (Python Client Library)
+
+rclpy is the Python client library for ROS 2. It provides the Python API for creating nodes, publishers, subscribers, services, and actions.
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+class MyNode(Node):
+    def __init__(self):
+        super().__init__('my_node')
+        self.publisher = self.create_publisher(String, 'topic', 10)
+        self.timer = self.create_timer(0.5, self.timer_callback)
+        
+    def timer_callback(self):
+        msg = String()
+        msg.data = 'Hello from Python!'
+        self.publisher.publish(msg)
+
+def main():
+    rclpy.init()
+    node = MyNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+### 2. rclcpp (C++ Client Library)
+
+rclcpp is the C++ client library for ROS 2. It provides the C++ API for ROS 2 functionality.
+
+```cpp
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/string.hpp>
+
+using namespace std::chrono_literals;
+
+class MinimalPublisher : public rclcpp::Node
+{
+public:
+    MinimalPublisher()
+    : Node("minimal_publisher"), count_(0)
+    {
+        publisher_ = this->create_publisher<std_msgs::msg::String>("topic", 10);
+        timer_ = this->create_wall_timer(
+            500ms, std::bind(&MinimalPublisher::timer_callback, this));
+    }
+
+private:
+    void timer_callback()
+    {
+        auto message = std_msgs::msg::String();
+        message.data = "Hello World: " + std::to_string(count_++);
+        RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data.c_str());
+        publisher_->publish(message);
+    }
+    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
+    size_t count_;
+};
+```
+
+### 3. tf2 (Transform Library)
+
+tf2 is the transform library that helps keep track of coordinate frames in a ROS system. It's crucial for humanoid robotics where multiple coordinate frames are needed for different body parts.
+
+```python
+import rclpy
+from rclpy.node import Node
+from tf2_ros import TransformBroadcaster
+from geometry_msgs.msg import TransformStamped
+
+class FramePublisher(Node):
+    def __init__(self):
+        super().__init__('frame_publisher')
+        self.tf_broadcaster = TransformBroadcaster(self)
+        
+    def broadcast_transform(self):
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'base_link'
+        t.child_frame_id = 'laser_frame'
+        t.transform.translation.x = 0.1
+        t.transform.translation.y = 0.0
+        t.transform.translation.z = 0.2
+        # Quaternion for no rotation
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 1.0
+        
+        self.tf_broadcaster.sendTransform(t)
+```
+
+### 4. message_filters
+
+The message_filters library provides tools for synchronizing messages from different topics based on timestamps.
+
+```python
+import message_filters
+from sensor_msgs.msg import Image, CameraInfo
+
+def callback(image, camera_info):
+    # Process synchronized image and camera info
+    print(f"Received synchronized image and camera info at time {image.header.stamp}")
+
+def main():
+    rclpy.init()
+    node = rclpy.create_node('message_sync_example')
+    
+    # Subscribe to image and camera info topics
+    image_sub = message_filters.Subscriber(node, Image, '/camera/image')
+    info_sub = message_filters.Subscriber(node, CameraInfo, '/camera/camera_info')
+    
+    # Synchronize the messages
+    ts = message_filters.ApproximateTimeSynchronizer([image_sub, info_sub], 10, 0.1)
+    ts.registerCallback(callback)
+    
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+```
+
+## Visualization and Analysis Tools
+
+### 1. PlotJuggler
+
+PlotJuggler is a tool for plotting and analyzing time series data. It can connect directly to ROS 2 topics.
+
+```bash
+# Install and run PlotJuggler with ROS 2 plugin
+plotjuggler
+```
+
+### 2. Foxglove Studio
+
+Foxglove Studio is a modern visualization and debugging tool for robotics data, supporting ROS 2.
+
+```bash
+# Install and run Foxglove Studio
+foxglove-studio
+```
+
+## Development Environment Tools
+
+### 1. VS Code with ROS Extension
+
+The ROS extension for VS Code provides syntax highlighting, IntelliSense, and debugging support for ROS 2 development.
+
+### 2. Docker for ROS 2 Development
+
+Docker can be used to create consistent development environments for ROS 2:
+
+```dockerfile
+FROM ros:jazzy
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    && rm -rf /var/lib/apt/lists/*
+
+# Source ROS environment
+SHELL ["/bin/bash", "-c"]
+RUN echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
+
+WORKDIR /workspace
+```
+
+## Safety and Monitoring Tools
+
+### 1. ROS 2 Security Tools
+
+For safety-critical humanoid robotics applications, ROS 2 provides security tools:
+
+```bash
+# Generate security artifacts
+ros2 security create_keystore <keystore_path>
+ros2 security create_key <keystore_path> <node_name>
+```
+
+### 2. Resource Monitoring
+
+Monitor system resources when running ROS 2 systems:
+
+```bash
+# Monitor CPU and memory usage
+htop
+
+# Monitor network usage
+nethogs
+
+# Monitor ROS 2 topics bandwidth
+ros2 topic bw
+```
+
+## Summary
+
+These tools and libraries form the foundation of effective ROS 2 development for humanoid robotics. Mastering these tools will significantly improve your productivity and ability to debug and visualize complex robotic systems. Each tool serves a specific purpose in the development, testing, and deployment pipeline of ROS 2-based robotic applications.

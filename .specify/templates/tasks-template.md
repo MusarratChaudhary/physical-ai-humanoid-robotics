@@ -25,21 +25,21 @@ description: "Task list template for feature implementation"
 - **Mobile**: `api/src/`, `ios/src/` or `android/src/`
 - Paths shown below assume single project - adjust based on plan.md structure
 
-<!-- 
+<!--
   ============================================================================
   IMPORTANT: The tasks below are SAMPLE TASKS for illustration purposes only.
-  
+
   The /sp.tasks command MUST replace these with actual tasks based on:
   - User stories from spec.md (with their priorities P1, P2, P3...)
   - Feature requirements from plan.md
   - Entities from data-model.md
   - Endpoints from contracts/
-  
+
   Tasks MUST be organized by user story so each story can be:
   - Implemented independently
   - Tested independently
   - Delivered as an MVP increment
-  
+
   DO NOT keep these sample tasks in the generated tasks.md file.
   ============================================================================
 -->
@@ -249,3 +249,33 @@ With multiple developers:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
+
+---
+
+## Constitution Compliance Check
+
+*GATE: All tasks must comply with the Physical AI & Humanoid Robotics Constitution*
+
+**Constitution Principles for Physical AI & Humanoid Robotics:**
+1. All content must be technically accurate and based on current best practices in ROS 2, NVIDIA Isaac, Gazebo/Unity, and VLA models as of 2025
+2. Use Docusaurus exclusively for the site – no alternatives
+3. Favor MDX for rich content: executable code snippets, Mermaid diagrams, embedded demos
+4. Structure strictly follows the 4 modules + intro + capstone
+5. Every module must include: Theory, Tools/Libraries, Hands-on Labs, Challenges, and Quiz/Reflection questions
+6. Emphasize embodied intelligence, physical laws, and safe human-robot interaction
+7. Code examples must be runnable, well-commented, and use Python where possible
+8. Site must be SEO-friendly, fast-loading, and include versioned docs
+9. Never introduce unrequested features; stay faithful to the course outline
+10. Output only clean, production-ready Markdown/MDX files compatible with Docusaurus
+
+**Verification:**
+- [ ] Technical accuracy verified for robotics/AI concepts
+- [ ] Docusaurus implementation confirmed
+- [ ] MDX usage planned for interactive content
+- [ ] Module structure alignment confirmed
+- [ ] Educational content requirements addressed
+- [ ] Embodied intelligence focus maintained
+- [ ] Code examples will be runnable and well-documented
+- [ ] Performance and SEO requirements considered
+- [ ] Scope fidelity maintained
+- [ ] Production-ready output planned

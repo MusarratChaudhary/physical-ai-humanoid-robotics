@@ -1,0 +1,288 @@
+---
+title: Quiz & Reflection Questions for Module 1
+sidebar_label: Quiz & Reflection
+---
+
+# Quiz & Reflection Questions for Module 1
+
+## Multiple Choice Questions
+
+### Question 1
+What does DDS stand for in the context of ROS 2?
+- A) Distributed Data System
+- B) Data Distribution Service
+- C) Dynamic Data Structure
+- D) Distributed Development System
+
+<details>
+<summary>Answer</summary>
+B) Data Distribution Service
+</details>
+
+### Question 2
+Which of the following is NOT a communication pattern in ROS 2?
+- A) Publish-Subscribe (Topics)
+- B) Request-Response (Services)
+- C) Action-Based Communication
+- D) Direct Function Calls
+
+<details>
+<summary>Answer</summary>
+D) Direct Function Calls
+</details>
+
+### Question 3
+What is the primary purpose of Quality of Service (QoS) policies in ROS 2?
+- A) To increase the speed of message transmission
+- B) To configure how messages are delivered in terms of reliability, durability, and other characteristics
+- C) To encrypt messages for security
+- D) To compress messages to save bandwidth
+
+<details>
+<summary>Answer</summary>
+B) To configure how messages are delivered in terms of reliability, durability, and other characteristics
+</details>
+
+### Question 4
+Which ROS 2 client library is used for Python development?
+- A) rclcpp
+- B) rclpy
+- C) rmw
+- D) rcl
+
+<details>
+<summary>Answer</summary>
+B) rclpy
+</details>
+
+### Question 5
+What is the main difference between ROS 1 and ROS 2 regarding communication middleware?
+- A) ROS 2 uses TCP while ROS 1 uses UDP
+- B) ROS 2 uses DDS as its communication middleware while ROS 1 had its own custom communication layer
+- C) ROS 2 is faster than ROS 1
+- D) ROS 1 supports multiple languages while ROS 2 does not
+
+<details>
+<summary>Answer</summary>
+B) ROS 2 uses DDS as its communication middleware while ROS 1 had its own custom communication layer
+</details>
+
+## True/False Questions
+
+### Question 6
+ROS 2 supports real-time performance through its DDS implementation.
+- A) True
+- B) False
+
+<details>
+<summary>Answer</summary>
+A) True
+</details>
+
+### Question 7
+In ROS 2, nodes can only communicate if they are running on the same machine.
+- A) True
+- B) False
+
+<details>
+<summary>Answer</summary>
+B) False
+</details>
+
+### Question 8
+Actions in ROS 2 are used for short, instantaneous operations.
+- A) True
+- B) False
+
+<details>
+<summary>Answer</summary>
+B) False
+</details>
+
+### Question 9
+The colcon build system is used in ROS 2 instead of the catkin build system used in ROS 1.
+- A) True
+- B) False
+
+<details>
+<summary>Answer</summary>
+A) True
+</details>
+
+### Question 10
+ROS 2 has built-in security features such as authentication, access control, and encryption.
+- A) True
+- B) False
+
+<details>
+<summary>Answer</summary>
+A) True
+</details>
+
+## Short Answer Questions
+
+### Question 11
+Explain the publish-subscribe communication pattern in ROS 2 and provide an example of when it would be appropriate to use this pattern in a humanoid robotics application.
+
+<details>
+<summary>Answer</summary>
+The publish-subscribe pattern in ROS 2 allows nodes to communicate asynchronously through topics. Publishers send messages to topics, and subscribers receive messages from topics without direct connections between them. This pattern is appropriate for continuous data streams like sensor data (e.g., IMU readings, camera images, or joint states) where multiple nodes might need to consume the same data simultaneously.
+</details>
+
+### Question 12
+What are the key differences between services and actions in ROS 2? When would you use each?
+
+<details>
+<summary>Answer</summary>
+Services provide synchronous, request-response communication, ideal for short operations where a client sends a request and waits for a response. Actions are used for long-running tasks that may provide feedback during execution and support goals, results, and cancellation. Use services for quick operations like setting parameters or requesting robot state, and use actions for complex tasks like navigation or manipulation that take time to complete.
+</details>
+
+### Question 13
+Describe the role of Quality of Service (QoS) policies in ROS 2 and explain why they are important for humanoid robotics applications.
+
+<details>
+<summary>Answer</summary>
+QoS policies in ROS 2 allow you to configure how messages are delivered in terms of reliability, durability, history, and other characteristics. They are important for humanoid robotics because different types of data have different requirements. For example, control commands require reliable delivery to ensure safety, while sensor data might use best-effort delivery to reduce latency. QoS policies ensure that the communication system meets the specific requirements of different robotic subsystems.
+</details>
+
+### Question 14
+What are the main safety considerations when developing ROS 2-based humanoid robotic systems?
+
+<details>
+<summary>Answer</summary>
+Key safety considerations include: implementing layered safety approaches (hardware, firmware, ROS nodes, application), using appropriate QoS settings for safety-critical communication, implementing emergency stop systems, validating parameters to prevent dangerous values, monitoring system states for safety violations, testing in simulation before hardware deployment, and maintaining safety documentation and procedures.
+</details>
+
+### Question 15
+Explain the concept of lifecycle nodes in ROS 2 and why they are important for safety-critical applications.
+
+<details>
+<summary>Answer</summary>
+Lifecycle nodes in ROS 2 follow a defined state machine with states like unconfigured, inactive, active, and finalized. They provide a structured way to initialize, configure, activate, deactivate, and clean up resources. They are important for safety-critical applications because they ensure proper initialization of safety systems, controlled activation of potentially dangerous functions, and proper cleanup of resources, reducing the risk of unsafe states.
+</details>
+
+## Programming Questions
+
+### Question 16
+Write a Python ROS 2 node that publishes a "Hello, World!" message to a topic called "greetings" every 2 seconds.
+
+<details>
+<summary>Answer</summary>
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+class GreetingPublisher(Node):
+    def __init__(self):
+        super().__init__('greeting_publisher')
+        self.publisher = self.create_publisher(String, 'greetings', 10)
+        timer_period = 2  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.i = 0
+
+    def timer_callback(self):
+        msg = String()
+        msg.data = f'Hello, World! {self.i}'
+        self.publisher.publish(msg)
+        self.get_logger().info(f'Publishing: "{msg.data}"')
+        self.i += 1
+
+def main(args=None):
+    rclpy.init(args=args)
+    greeting_publisher = GreetingPublisher()
+    rclpy.spin(greeting_publisher)
+    greeting_publisher.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+</details>
+
+### Question 17
+Write a Python ROS 2 node that subscribes to the "greetings" topic and logs the received messages.
+
+<details>
+<summary>Answer</summary>
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+class GreetingSubscriber(Node):
+    def __init__(self):
+        super().__init__('greeting_subscriber')
+        self.subscription = self.create_subscription(
+            String,
+            'greetings',
+            self.listener_callback,
+            10)
+        self.subscription  # prevent unused variable warning
+
+    def listener_callback(self, msg):
+        self.get_logger().info(f'I heard: "{msg.data}"')
+
+def main(args=None):
+    rclpy.init(args=args)
+    greeting_subscriber = GreetingSubscriber()
+    rclpy.spin(greeting_subscriber)
+    greeting_subscriber.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+</details>
+
+## Reflection Questions
+
+### Question 18
+How does the distributed architecture of ROS 2 benefit humanoid robotics applications compared to centralized architectures?
+
+<details>
+<summary>Reflection Points</summary>
+Consider the following points in your reflection:
+- Modularity and reusability of components
+- Fault tolerance and system reliability
+- Scalability as more sensors and actuators are added
+- Parallel processing capabilities
+- Easier debugging and maintenance
+- Distribution of computation across multiple processing units in the robot
+</details>
+
+### Question 19
+What are the challenges of implementing safety systems in ROS 2, and how can they be addressed?
+
+<details>
+<summary>Reflection Points</summary>
+Consider the following points in your reflection:
+- Complexity of distributed safety monitoring
+- Communication delays and reliability
+- Integration of hardware safety systems
+- Validation and testing of safety systems
+- Real-time requirements
+- Fail-safe mechanisms
+- Layered safety approaches
+</details>
+
+### Question 20
+How would you design a ROS 2 system for a humanoid robot that needs to operate safely around humans? What safety measures would you implement?
+
+<details>
+<summary>Reflection Points</summary>
+Consider the following points in your reflection:
+- Multiple layers of safety (hardware, firmware, ROS nodes, applications)
+- Emergency stop systems
+- Collision detection and avoidance
+- Speed and force limiting
+- Human detection and tracking
+- Safe trajectory planning
+- Monitoring and logging
+- Fail-safe behaviors
+- Regular safety validation
+</details>
+
+## Summary
+
+This quiz covers the fundamental concepts of ROS 2 as they apply to humanoid robotics. Understanding these concepts is essential for developing safe, reliable, and effective robotic systems. Take time to reflect on the concepts and consider how they apply to real-world humanoid robotics applications.

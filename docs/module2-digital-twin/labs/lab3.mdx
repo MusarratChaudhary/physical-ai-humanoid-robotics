@@ -1,0 +1,692 @@
+---
+title: "Lab 3: Unity Simulation for Humanoid Robots"
+sidebar_label: "Lab 3: Unity Simulation"
+---
+
+# Lab 3: Unity Simulation for Humanoid Robots
+
+In this lab, you'll explore Unity as a simulation platform for humanoid robotics. You'll learn to import ROS2 robot models, set up realistic environments, and use Unity's ML-Agents for robot learning and control.
+
+## Learning Objectives
+
+By the end of this lab, you will be able to:
+- Set up Unity for robotics simulation using the Unity Robotics Hub
+- Import ROS2 robot models (URDF) into Unity
+- Create realistic environments for humanoid robot simulation
+- Implement basic robot control in Unity
+- Use ML-Agents for robot learning in simulation
+- Connect Unity simulation to ROS2 for hybrid workflows
+
+## Prerequisites
+
+Before starting this lab, ensure you have:
+- Unity Hub and Unity 2021.3 LTS installed
+- Unity Robotics Package installed
+- ML-Agents Toolkit installed
+- URDF Importer installed
+- Basic understanding of Unity interface and C# programming
+- ROS2 Humble installed on your system
+
+## Step 1: Setting Up Unity for Robotics
+
+First, let's create a new Unity project for robotics simulation:
+
+1. Open Unity Hub
+2. Click "New Project"
+3. Select the "3D (Built-in Render Pipeline)" template (avoid URP/HDRP for initial setup)
+4. Name your project "HumanoidRobotSimulation"
+5. Click "Create Project"
+
+Once the project is created, install the required packages:
+
+1. Go to Window → Package Manager
+2. Click the "+" button in the top-left corner
+3. Select "Add package from git URL..."
+4. Add these packages:
+   - `com.unity.robotics.urdf-importer` (URDF Importer)
+   - `com.unity.robotics.ros-tcp-connector` (ROS TCP Connector)
+   - `com.unity.ml-agents` (ML-Agents)
+
+## Step 2: Importing a Robot Model
+
+Let's import a humanoid robot model into Unity:
+
+1. Create a new folder in your Assets called "Robots"
+2. Copy your URDF files (from previous labs) to a folder on your computer
+3. In Unity, go to GameObject → URDF Importer → Import URDF
+4. Navigate to your URDF file and select it
+5. Unity will import your robot model with all links and joints
+
+If you don't have a URDF file ready, create a simple one for this lab:
+
+```xml
+<!-- Save as simple_humanoid.urdf -->
+<?xml version="1.0"?>
+<robot name="simple_humanoid">
+  <!-- Base Link -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.3 0.2 0.4"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 1 0.8"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.3 0.2 0.4"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="10.0"/>
+      <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+    </inertial>
+  </link>
+
+  <!-- Head -->
+  <joint name="neck_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="head"/>
+    <origin xyz="0 0 0.3" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <link name="head">
+    <visual>
+      <geometry>
+        <sphere radius="0.1"/>
+      </geometry>
+      <material name="white">
+        <color rgba="1 1 1 0.8"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="0.1"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+    </inertial>
+  </link>
+
+  <!-- Left Arm -->
+  <joint name="left_shoulder_pitch" type="continuous">
+    <parent link="base_link"/>
+    <child link="left_upper_arm"/>
+    <origin xyz="0.2 0.1 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+  </joint>
+
+  <link name="left_upper_arm">
+    <visual>
+      <geometry>
+        <cylinder length="0.3" radius="0.05"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 0.8"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="0.3" radius="0.05"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="left_elbow" type="continuous">
+    <parent link="left_upper_arm"/>
+    <child link="left_lower_arm"/>
+    <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+  </joint>
+
+  <link name="left_lower_arm">
+    <visual>
+      <geometry>
+        <cylinder length="0.25" radius="0.04"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 0.8"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="0.25" radius="0.04"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.8"/>
+      <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+    </inertial>
+  </link>
+</robot>
+```
+
+## Step 3: Setting Up Physics and Environment
+
+Now let's set up the physics and environment for our humanoid robot:
+
+1. In the Unity hierarchy, right-click and create a "3D Object → Plane" as the ground
+2. Scale it appropriately (e.g., scale to (5, 1, 5))
+3. Add a Physics Material to the plane with low friction (0.1) and bounciness (0)
+4. Add lighting to the scene (Directional Light)
+5. Position the camera to view the robot
+
+Create a Physics Material:
+1. Right-click in the Assets folder → Create → Physics Material
+2. Name it "LowFriction"
+3. Set Dynamic Friction and Static Friction to 0.1
+4. Set Bounciness to 0
+5. Apply this material to the ground plane
+
+## Step 4: Creating a Robot Controller Script
+
+Create a C# script to control your robot. In the Assets folder, create a new folder called "Scripts", then create a new C# script called "HumanoidController.cs":
+
+```csharp
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using Unity.Robotics.ROSTCPConnector.MessageTypes.Std;
+using Unity.Robotics.ROSTCPConnector.MessageTypes.Sensor;
+
+public class HumanoidController : MonoBehaviour
+{
+    [Header("ROS Connection")]
+    public string rosIPAddress = "127.0.0.1";
+    public int rosPort = 10000;
+    
+    [Header("Joint Controls")]
+    public ArticulationBody neckJoint;
+    public ArticulationBody leftShoulder;
+    public ArticulationBody leftElbow;
+    
+    [Header("Movement Parameters")]
+    public float moveSpeed = 10f;
+    public float turnSpeed = 50f;
+    
+    private ROSConnection ros;
+    private string robotTopic = "humanoid/joint_commands";
+
+    void Start()
+    {
+        // Connect to ROS
+        ros = ROSConnection.instance;
+        ros.Initialize(rosIPAddress, rosPort);
+        
+        // Subscribe to joint command topic
+        ros.Subscribe<Float32MultiArrayMsg>(robotTopic, OnJointCommandsReceived);
+    }
+
+    void Update()
+    {
+        // Handle keyboard input for testing
+        HandleKeyboardInput();
+    }
+
+    void HandleKeyboardInput()
+    {
+        // Neck control (looking up/down)
+        if (Input.GetKey(KeyCode.UpArrow))
+        {
+            DriveJoint(neckJoint, -turnSpeed);
+        }
+        else if (Input.GetKey(KeyCode.DownArrow))
+        {
+            DriveJoint(neckJoint, turnSpeed);
+        }
+        else
+        {
+            StopJoint(neckJoint);
+        }
+
+        // Shoulder control (arm raising/lowering)
+        if (Input.GetKey(KeyCode.RightArrow))
+        {
+            DriveJoint(leftShoulder, -turnSpeed);
+        }
+        else if (Input.GetKey(KeyCode.LeftArrow))
+        {
+            DriveJoint(leftShoulder, turnSpeed);
+        }
+        else
+        {
+            StopJoint(leftShoulder);
+        }
+
+        // Elbow control (arm bending)
+        if (Input.GetKey(KeyCode.PageUp))
+        {
+            DriveJoint(leftElbow, -turnSpeed);
+        }
+        else if (Input.GetKey(KeyCode.PageDown))
+        {
+            DriveJoint(leftElbow, turnSpeed);
+        }
+        else
+        {
+            StopJoint(leftElbow);
+        }
+    }
+
+    void DriveJoint(ArticulationBody joint, float force)
+    {
+        ArticulationDrive drive = joint.xDrive;
+        drive.force = force;
+        joint.xDrive = drive;
+    }
+
+    void StopJoint(ArticulationBody joint)
+    {
+        ArticulationDrive drive = joint.xDrive;
+        drive.force = 0;
+        joint.xDrive = drive;
+    }
+
+    void OnJointCommandsReceived(Float32MultiArrayMsg msg)
+    {
+        // Process joint commands from ROS
+        if (msg.data.Length >= 3)
+        {
+            // Assuming msg.data contains [neck, shoulder, elbow] positions
+            SetJointTarget(neckJoint, msg.data[0]);
+            SetJointTarget(leftShoulder, msg.data[1]);
+            SetJointTarget(leftElbow, msg.data[2]);
+        }
+    }
+
+    void SetJointTarget(ArticulationBody joint, float targetPosition)
+    {
+        ArticulationDrive drive = joint.xDrive;
+        drive.target = targetPosition;
+        joint.xDrive = drive;
+    }
+
+    void OnDestroy()
+    {
+        if (ros != null)
+            ros.Disconnect();
+    }
+}
+```
+
+## Step 5: Configuring Articulation Bodies
+
+For the script to work properly, you need to configure the Articulation Bodies in your imported robot:
+
+1. Select each joint in the hierarchy (neck_joint, left_shoulder_pitch, left_elbow)
+2. Ensure they have an "Articulation Body" component attached
+3. Configure the joint limits and drive parameters:
+   - For revolute joints: Set Index High Limit and Index Low Limit
+   - Enable "Drive" for each joint
+   - Set appropriate stiffness, damping, and force limits
+
+Example configuration for the neck joint:
+- Anchor Position: Match the joint position from URDF
+- Index High Limit: 0.5 radians
+- Index Low Limit: -0.5 radians
+- X Drive → Drive Type: Force
+- X Drive → Stiffness: 80
+- X Drive → Damping: 50
+- X Drive → Force Limit: 100
+
+## Step 6: Creating a Unity Scene with Environment
+
+Create a more interesting environment for your humanoid robot:
+
+1. Create additional objects like boxes, cylinders, or spheres as obstacles
+2. Add materials with different colors and properties
+3. Create ramps or stairs for the robot to navigate
+4. Set up multiple cameras for different views
+
+Create a simple obstacle course:
+1. Create several cubes of different sizes
+2. Position them to form a simple maze or path
+3. Add a material with high friction to prevent sliding
+4. Make sure the robot can navigate around them
+
+## Step 7: Setting Up ML-Agents for Robot Learning
+
+Now let's set up ML-Agents to train our humanoid robot:
+
+1. Create a new C# script called "HumanoidAgent.cs":
+
+```csharp
+using Unity.MLAgents;
+using Unity.MLAgents.Actuators;
+using Unity.MLAgents.Sensors;
+using UnityEngine;
+
+public class HumanoidAgent : Agent
+{
+    [Header("Joint References")]
+    public ArticulationBody[] joints;
+
+    [Header("Environment")]
+    public Transform target;
+    public float reachDistance = 1.0f;
+
+    [Header("Movement")]
+    public float moveForce = 40f;
+
+    Rigidbody m_Rigidbody;
+
+    public override void Initialize()
+    {
+        m_Rigidbody = GetComponent<Rigidbody>();
+    }
+
+    public override void OnEpisodeBegin()
+    {
+        // Reset agent position
+        transform.position = new Vector3(Random.Range(-3f, 3f), 1f, Random.Range(-3f, 3f));
+        
+        // Reset target position
+        target.position = new Vector3(Random.Range(-3f, 3f), 0.5f, Random.Range(-3f, 3f));
+        
+        // Reset joint positions
+        foreach (var joint in joints)
+        {
+            var drive = joint.xDrive;
+            drive.target = 0f;
+            joint.xDrive = drive;
+        }
+    }
+
+    public override void CollectObservations(VectorSensor sensor)
+    {
+        // Observe agent position and rotation
+        sensor.AddObservation(transform.position);
+        sensor.AddObservation(transform.rotation.eulerAngles);
+
+        // Observe target position
+        sensor.AddObservation(target.position);
+
+        // Observe joint positions and velocities
+        foreach (var joint in joints)
+        {
+            sensor.AddObservation(joint.jointPosition);
+            sensor.AddObservation(joint.jointVelocity);
+        }
+    }
+
+    public override void OnActionReceived(ActionBuffers actions)
+    {
+        // Actions correspond to joint movements
+        float[] continuousActions = actions.ContinuousActions.ToArray();
+
+        for (int i = 0; i < Mathf.Min(continuousActions.Length, joints.Length); i++)
+        {
+            var joint = joints[i];
+            var drive = joint.xDrive;
+            drive.target += continuousActions[i] * 10f; // Scale the action
+            joint.xDrive = drive;
+        }
+
+        // Calculate distance to target
+        float distanceToTarget = Vector3.Distance(transform.position, target.position);
+
+        // Reward based on proximity to target
+        SetReward(-distanceToTarget * 0.01f); // Negative reward for distance
+
+        // Bonus reward for reaching the target
+        if (distanceToTarget < reachDistance)
+        {
+            SetReward(GetReward() + 10f);
+            EndEpisode();
+        }
+
+        // End episode if agent falls
+        if (transform.position.y < 0)
+        {
+            SetReward(-1f);
+            EndEpisode();
+        }
+    }
+
+    public override void Heuristic(in ActionBuffers actionsOut)
+    {
+        // Manual control for testing (optional)
+        var continuousActionsOut = actionsOut.ContinuousActions;
+        
+        continuousActionsOut[0] = Input.GetAxis("Horizontal"); // Joint 1
+        continuousActionsOut[1] = Input.GetAxis("Vertical");   // Joint 2
+        // Add more controls as needed
+    }
+}
+```
+
+2. Create an Academy for your environment:
+   - Create an empty GameObject called "Academy"
+   - Add the "PyTorchAcademy" component (or "Academy" if using older ML-Agents)
+   - Set Max Steps Per Episode to 5000
+
+3. Attach the HumanoidAgent script to your robot's base link
+4. Assign the joints array with your robot's articulation bodies
+5. Assign the target transform to a visible object in the scene
+
+## Step 8: Configuring ML-Agents Training
+
+Create a configuration file for training:
+
+1. Create a new folder called "Config" in your Assets
+2. Create a YAML file called "humanoid_config.yaml":
+
+```yaml
+behaviors:
+  HumanoidLearning:
+    trainer_type: ppo
+    hyperparameters:
+      batch_size: 1024
+      buffer_size: 4096
+      learning_rate: 3.0e-4
+      beta: 5.0e-4
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: linear
+    network_settings:
+      normalize: false
+      hidden_units: 128
+      num_layers: 2
+    max_steps: 1000000
+    time_horizon: 64
+    summary_freq: 10000
+```
+
+## Step 9: Connecting Unity to ROS2
+
+To connect Unity to ROS2, you'll need to set up the ROS TCP Connector:
+
+1. Add the ROS TCP Connector to your scene:
+   - Create an empty GameObject called "ROSConnection"
+   - Add the "ROSConnection" component to it
+
+2. Create a simple ROS publisher script to send sensor data from Unity:
+
+```csharp
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using Unity.Robotics.ROSTCPConnector.MessageTypes.Geometry;
+using Unity.Robotics.ROSTCPConnector.MessageTypes.Sensor;
+
+public class UnityROSPublisher : MonoBehaviour
+{
+    [Header("ROS Connection")]
+    public string rosIPAddress = "127.0.0.1";
+    public int rosPort = 10000;
+    
+    [Header("Robot Components")]
+    public Transform robotBase;
+    public Transform sensorMount;
+    
+    private ROSConnection ros;
+    private string positionTopic = "humanoid/position";
+    private string sensorTopic = "humanoid/sensor_data";
+    
+    private float publishInterval = 0.1f; // Publish at 10Hz
+    private float lastPublishTime;
+
+    void Start()
+    {
+        ros = ROSConnection.instance;
+        ros.Initialize(rosIPAddress, rosPort);
+        
+        lastPublishTime = Time.time;
+    }
+
+    void Update()
+    {
+        if (Time.time - lastPublishTime > publishInterval)
+        {
+            PublishRobotData();
+            lastPublishTime = Time.time;
+        }
+    }
+
+    void PublishRobotData()
+    {
+        // Publish robot position
+        var positionMsg = new PoseStampedMsg
+        {
+            header = new HeaderMsg
+            {
+                stamp = new TimeStamp(0, (int)(Time.time * 1000000000) % 1000000000),
+                frame_id = "map"
+            },
+            pose = new PoseMsg
+            {
+                position = new PointMsg(robotBase.position.x, robotBase.position.y, robotBase.position.z),
+                orientation = new QuaternionMsg(robotBase.rotation.x, robotBase.rotation.y, robotBase.rotation.z, robotBase.rotation.w)
+            }
+        };
+        
+        ros.Publish(positionTopic, positionMsg);
+        
+        // Publish simulated sensor data
+        var sensorMsg = new LaserScanMsg
+        {
+            header = new HeaderMsg
+            {
+                stamp = new TimeStamp(0, (int)(Time.time * 1000000000) % 1000000000),
+                frame_id = "laser_frame"
+            },
+            angle_min = -Mathf.PI / 2,
+            angle_max = Mathf.PI / 2,
+            angle_increment = Mathf.PI / 180, // 1 degree increments
+            time_increment = 0,
+            scan_time = publishInterval,
+            range_min = 0.1f,
+            range_max = 10.0f,
+            ranges = GenerateFakeRanges() // Implement this method
+        };
+        
+        ros.Publish(sensorTopic, sensorMsg);
+    }
+    
+    float[] GenerateFakeRanges()
+    {
+        // Generate fake range data based on environment
+        float[] ranges = new float[181]; // 181 beams for 180 degrees
+        
+        for (int i = 0; i < ranges.Length; i++)
+        {
+            // Calculate angle for this beam
+            float angle = -Mathf.PI/2 + i * Mathf.PI / 180;
+            
+            // Cast ray in this direction to find obstacles
+            Vector3 direction = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
+            RaycastHit hit;
+            
+            if (Physics.Raycast(sensorMount.position, direction, out hit, 10.0f))
+            {
+                ranges[i] = hit.distance;
+            }
+            else
+            {
+                ranges[i] = 10.0f; // Max range if no obstacle detected
+            }
+        }
+        
+        return ranges;
+    }
+}
+```
+
+## Step 10: Testing the Unity Simulation
+
+1. Build and run your Unity scene
+2. In another terminal, start ROS2:
+   ```bash
+   source /opt/ros/humble/setup.bash
+   ```
+   
+3. Use ROS2 tools to monitor the published topics:
+   ```bash
+   # Monitor position topic
+   ros2 topic echo /humanoid/position
+   
+   # Monitor sensor data
+   ros2 topic echo /humanoid/sensor_data
+   ```
+
+4. You can also send commands to the robot:
+   ```bash
+   # Send joint commands
+   ros2 topic pub /humanoid/joint_commands std_msgs/Float32MultiArray '{data: [0.5, -0.3, 0.2]}'
+   ```
+
+## Step 11: Training the ML-Agent
+
+To train your ML-Agent:
+
+1. Install the ML-Agents Python package:
+   ```bash
+   pip install mlagents
+   ```
+
+2. Train the agent:
+   ```bash
+   mlagents-learn ./Assets/Config/humanoid_config.yaml --run-id=humanoid-v1 --train
+   ```
+
+3. Monitor training progress in TensorBoard:
+   ```bash
+   tensorboard --logdir results
+   ```
+
+## Lab Summary
+
+In this lab, you:
+- Set up Unity for robotics simulation with the Robotics Hub
+- Imported a URDF robot model into Unity
+- Created a controller script for robot manipulation
+- Implemented an ML-Agent for robot learning
+- Connected Unity to ROS2 for hybrid workflows
+- Created a training environment for humanoid robot learning
+
+## Troubleshooting Tips
+
+1. If joints don't move, check Articulation Body configurations
+2. If ROS connection fails, verify IP address and port settings
+3. If ML-Agents training doesn't start, check the Academy and Agent configurations
+4. If physics behave unexpectedly, adjust joint limits and drive parameters
+5. If Unity crashes, try reducing the complexity of the scene or lowering physics iterations
+
+## Next Steps
+
+With your understanding of both Gazebo and Unity simulation platforms, you can now:
+- Choose the appropriate platform for specific robotics tasks
+- Implement hybrid simulation approaches combining both platforms
+- Develop more complex humanoid robot behaviors
+- Bridge the gap between simulation and real-world deployment

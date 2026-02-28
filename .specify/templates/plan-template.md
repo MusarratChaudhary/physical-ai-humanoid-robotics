@@ -17,21 +17,43 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
 **Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
+**Project Type**: [single/web/mobile - determines source structure]
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
 **Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Constitution Principles for Physical AI & Humanoid Robotics:**
+1. All content must be technically accurate and based on current best practices in ROS 2, NVIDIA Isaac, Gazebo/Unity, and VLA models as of 2025
+2. Use Docusaurus exclusively for the site – no alternatives
+3. Favor MDX for rich content: executable code snippets, Mermaid diagrams, embedded demos
+4. Structure strictly follows the 4 modules + intro + capstone
+5. Every module must include: Theory, Tools/Libraries, Hands-on Labs, Challenges, and Quiz/Reflection questions
+6. Emphasize embodied intelligence, physical laws, and safe human-robot interaction
+7. Code examples must be runnable, well-commented, and use Python where possible
+8. Site must be SEO-friendly, fast-loading, and include versioned docs
+9. Never introduce unrequested features; stay faithful to the course outline
+10. Output only clean, production-ready Markdown/MDX files compatible with Docusaurus
+
+**Verification:**
+- [ ] Technical accuracy verified for robotics/AI concepts
+- [ ] Docusaurus implementation confirmed
+- [ ] MDX usage planned for interactive content
+- [ ] Module structure alignment confirmed
+- [ ] Educational content requirements addressed
+- [ ] Embodied intelligence focus maintained
+- [ ] Code examples will be runnable and well-documented
+- [ ] Performance and SEO requirements considered
+- [ ] Scope fidelity maintained
+- [ ] Production-ready output planned
 
 ## Project Structure
 

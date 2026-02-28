@@ -1,0 +1,90 @@
+---
+title: Physical AI & Humanoid Robotics
+description: Bridging Digital Intelligence with the Physical World
+hide_table_of_contents: true
+---
+
+import { motion } from "framer-motion";
+
+{/* Hero Section */}
+<motion.section
+  className="hero-section"
+  initial={{ opacity: 0, y: -40 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ duration: 0.8 }}
+>
+  {/* Left Content */}
+  <div className="hero-content">
+    <h1 className="hero-title">
+      Physical AI & Humanoid Robotics
+    </h1>
+    <p className="hero-subtext">
+      Bridging Digital Intelligence with the Physical World.  
+      Learn how AI merges with robotics to create machines that think, move, and interact like humans.  
+      This is your gateway to the future of humanoid robotics.
+    </p>
+    <div className="hero-buttons">
+      <a href="/docs/intro" style={{ textDecoration: "none" }}>
+        <button className="btn-primary">
+          🚀 Start Learning
+        </button>
+      </a>
+      <a href="#modules" style={{ textDecoration: "none" }}>
+        <button className="btn-outline">
+          📚 Explore Modules
+        </button>
+      </a>
+    </div>
+  </div>
+
+  {/* Right Robot Illustration */}
+  <div className="hero-robot">
+    <img
+      src="img/robot.png"
+      alt="Humanoid Robot"
+    />
+  </div>
+</motion.section>
+
+{/* Modules Section */}
+<section id="modules" className="modules-section">
+  <div className="modules-header">
+    <h2>Explore Our Learning Modules</h2>
+    <p>
+      Our modules are designed to take you from the fundamentals of robotic systems to advanced AI integration. 
+      Each step builds your expertise, and the capstone project challenges you to combine everything into a 
+      professional showcase of an autonomous humanoid robot.
+    </p>
+  </div>
+
+  <div className="modules-grid">
+    {[
+      { title: "Module 1", desc: "The Robotic Nervous System (ROS 2)", link: "/docs/module1-ros2" },
+      { title: "Module 2", desc: "The Digital Twin (Gazebo & Unity)", link: "/docs/module2-digital-twin" },
+      { title: "Module 3", desc: "The AI-Robot Brain (NVIDIA Isaac™)", link: "/docs/module3-ai-brain" },
+      { title: "Module 4", desc: "Vision-Language-Action (VLA)", link: "/docs/module4-vla" },
+      { title: "Capstone", desc: "The Autonomous Humanoid", link: "/docs/capstone" },
+    ].map((card, i) => (
+      <motion.div
+        key={i}
+        whileHover={{
+          scale: 1.05,
+          backgroundColor: "#f0f4ff",
+          color: "#111",
+          boxShadow: "0 8px 20px rgba(106,17,203,0.25)",
+        }}
+        transition={{ duration: 0.3 }}
+        className="module-card"
+      >
+        <a href={card.link} style={{ textDecoration: "none", color: "inherit" }}>
+          <h3>{card.title}</h3>
+          <p>{card.desc}</p>
+        </a>
+      </motion.div>
+    ))}
+  </div>
+</section>
+
+
+
+

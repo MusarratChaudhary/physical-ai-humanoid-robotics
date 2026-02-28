@@ -1,0 +1,1166 @@
+---
+title: Lab 3 - Services, Actions, and Parameters
+sidebar_label: "Lab 3: Services, Actions, and Parameters"
+---
+
+# Lab 3: Services, Actions, and Parameters
+
+## Objective
+
+In this lab, you will explore the remaining core communication patterns in ROS 2: services for request-response communication, actions for long-running tasks with feedback, and parameters for configuration. You will implement these concepts in the context of humanoid robotics applications.
+
+## Prerequisites
+
+- Completion of Labs 1 and 2
+- ROS 2 development environment set up
+- Understanding of nodes, topics, and custom messages
+
+## Duration
+
+Estimated time: 120-150 minutes
+
+## Safety Warning ⚠️
+
+This lab involves implementing communication patterns for robotic systems. While there are no immediate physical safety risks during development, always consider safety implications when working with actual robotic hardware. Ensure any commands sent to hardware have appropriate safety checks.
+
+## Step 1: Create Service Definitions
+
+### 1.1 Create a service package
+```bash
+cd ~/ros2_ws/src
+ros2 pkg create --build-type ament_cmake humanoid_services
+```
+
+### 1.2 Create the service directory
+```bash
+mkdir -p ~/ros2_ws/src/humanoid_services/srv
+```
+
+### 1.3 Define a humanoid control service
+Create `~/ros2_ws/src/humanoid_services/srv/MoveToPose.srv`:
+
+```
+# Request
+geometry_msgs/Pose target_pose
+float64 max_velocity
+float64 max_acceleration
+---
+# Response
+bool success
+string message
+int32 error_code
+```
+
+### 1.4 Define a humanoid status service
+Create `~/ros2_ws/src/humanoid_services/srv/GetRobotStatus.srv`:
+
+```
+# Request
+string robot_name
+---
+# Response
+bool success
+string message
+float64 battery_level
+bool is_operational
+bool is_calibrated
+float64[6] joint_temperatures
+```
+
+### 1.5 Update CMakeLists.txt
+Edit `~/ros2_ws/src/humanoid_services/CMakeLists.txt`:
+
+```cmake
+cmake_minimum_required(VERSION 3.8)
+project(humanoid_services)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+# Define service files
+set(srv_files
+  "srv/MoveToPose.srv"
+  "srv/GetRobotStatus.srv"
+)
+
+# Generate services
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${srv_files}
+  DEPENDENCIES geometry_msgs
+  ADD_LINTER_TESTS
+)
+
+ament_package()
+```
+
+### 1.6 Update package.xml
+Edit `~/ros2_ws/src/humanoid_services/package.xml`:
+
+```xml
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>humanoid_services</name>
+  <version>0.0.1</version>
+  <description>Custom services for humanoid robotics</description>
+  <maintainer email="developer@example.com">Your Name</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+```
+
+## Step 2: Create Action Definitions
+
+### 2.1 Create the action directory
+```bash
+mkdir -p ~/ros2_ws/src/humanoid_services/action
+```
+
+### 2.2 Define a humanoid walking action
+Create `~/ros2_ws/src/humanoid_services/action/WalkToGoal.action`:
+
+```
+# Goal
+geometry_msgs/PoseStamped target_location
+float64 step_size
+float64 walking_speed
+---
+# Result
+bool success
+string message
+int32 steps_taken
+float64 distance_traveled
+---
+# Feedback
+float64 distance_to_goal
+float64 current_speed
+int32 steps_completed
+string status
+```
+
+### 2.3 Define a humanoid manipulation action
+Create `~/ros2_ws/src/humanoid_services/action/PickAndPlace.action`:
+
+```
+# Goal
+string object_name
+geometry_msgs/PoseStamped target_pose
+float64 grasp_force
+---
+# Result
+bool success
+string message
+bool object_grasped
+bool object_placed
+---
+# Feedback
+string current_phase  # e.g., "approaching", "grasping", "lifting", "moving", "placing"
+geometry_msgs/Pose current_object_pose
+float64 grasp_effort
+```
+
+### 2.4 Update CMakeLists.txt to include actions
+Update the `srv_files` definition in `~/ros2_ws/src/humanoid_services/CMakeLists.txt`:
+
+```cmake
+# Define service and action files
+set(srv_files
+  "srv/MoveToPose.srv"
+  "srv/GetRobotStatus.srv"
+)
+
+set(action_files
+  "action/WalkToGoal.action"
+  "action/PickAndPlace.action"
+)
+
+# Generate services and actions
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${srv_files}
+  ${action_files}
+  DEPENDENCIES geometry_msgs
+  ADD_LINTER_TESTS
+)
+```
+
+## Step 3: Build the Service and Action Package
+
+### 3.1 Build the workspace
+```bash
+cd ~/ros2_ws
+colcon build --packages-select humanoid_services
+source install/setup.bash
+```
+
+### 3.2 Verify the services and actions
+```bash
+ros2 interface show humanoid_services/srv/MoveToPose
+ros2 interface show humanoid_services/action/WalkToGoal
+```
+
+## Step 4: Create a Service Server
+
+### 4.1 Create a new package for the service server
+```bash
+cd ~/ros2_ws/src
+ros2 pkg create --build-type ament_python humanoid_control_server --dependencies rclpy std_msgs geometry_msgs humanoid_services
+```
+
+### 4.2 Create the service server node
+Create `~/ros2_ws/src/humanoid_control_server/humanoid_control_server/control_server.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Pose
+from humanoid_services.srv import MoveToPose, GetRobotStatus
+import time
+import random
+
+
+class HumanoidControlServer(Node):
+    def __init__(self):
+        super().__init__('humanoid_control_server')
+        
+        # Create service servers
+        self.move_to_pose_srv = self.create_service(
+            MoveToPose, 'move_to_pose', self.move_to_pose_callback)
+        
+        self.get_status_srv = self.create_service(
+            GetRobotStatus, 'get_robot_status', self.get_status_callback)
+        
+        self.get_logger().info('Humanoid Control Server initialized')
+
+    def move_to_pose_callback(self, request, response):
+        self.get_logger().info(
+            f'Received move request to pose: ({request.target_pose.position.x:.2f}, '
+            f'{request.target_pose.position.y:.2f}, {request.target_pose.position.z:.2f})'
+        )
+        
+        # Simulate movement execution
+        # In a real robot, this would involve actual motion planning and execution
+        time.sleep(2)  # Simulate execution time
+        
+        # Simulate success/failure
+        success = random.random() > 0.1  # 90% success rate
+        
+        if success:
+            response.success = True
+            response.message = "Successfully moved to target pose"
+            response.error_code = 0
+            self.get_logger().info('Move to pose completed successfully')
+        else:
+            response.success = False
+            response.message = "Failed to reach target pose - obstacle detected"
+            response.error_code = 1
+            self.get_logger().error('Move to pose failed')
+        
+        return response
+
+    def get_status_callback(self, request, response):
+        self.get_logger().info(f'Received status request for robot: {request.robot_name}')
+        
+        # Simulate getting robot status
+        response.success = True
+        response.message = "Status retrieved successfully"
+        response.battery_level = random.uniform(20.0, 100.0)  # Random battery level
+        response.is_operational = True
+        response.is_calibrated = True
+        
+        # Simulate joint temperatures
+        response.joint_temperatures = []
+        for i in range(6):
+            response.joint_temperatures.append(random.uniform(25.0, 45.0))
+        
+        self.get_logger().info(
+            f'Status for {request.robot_name}: Battery {response.battery_level:.1f}%, '
+            f'Operational: {response.is_operational}, Calibrated: {response.is_calibrated}'
+        )
+        
+        return response
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    control_server = HumanoidControlServer()
+    
+    try:
+        rclpy.spin(control_server)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        control_server.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 4.3 Make the script executable and update setup.py
+```bash
+chmod +x ~/ros2_ws/src/humanoid_control_server/humanoid_control_server/control_server.py
+```
+
+Edit `~/ros2_ws/src/humanoid_control_server/setup.py` to add the entry point:
+
+```python
+entry_points={
+    'console_scripts': [
+        'control_server = humanoid_control_server.control_server:main',
+    ],
+},
+```
+
+## Step 5: Create a Service Client
+
+### 5.1 Create the service client node
+Create `~/ros2_ws/src/humanoid_control_server/humanoid_control_server/service_client.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Pose, Point, Quaternion
+from humanoid_services.srv import MoveToPose, GetRobotStatus
+
+
+class ServiceClient(Node):
+    def __init__(self):
+        super().__init__('service_client')
+        
+        # Create clients
+        self.move_to_pose_client = self.create_client(
+            MoveToPose, 'move_to_pose')
+        self.get_status_client = self.create_client(
+            GetRobotStatus, 'get_robot_status')
+        
+        # Wait for services to be available
+        while not self.move_to_pose_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Move to pose service not available, waiting again...')
+        
+        while not self.get_status_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Get status service not available, waiting again...')
+        
+        # Create requests
+        self.get_status_request = GetRobotStatus.Request()
+        self.move_to_pose_request = MoveToPose.Request()
+        
+        # Timer to periodically call services
+        self.timer = self.create_timer(5.0, self.timer_callback)
+        self.call_count = 0
+
+    def timer_callback(self):
+        if self.call_count % 2 == 0:
+            # Call get status service
+            self.get_status_request.robot_name = "Atlas-like_Humanoid"
+            self.get_status_future = self.get_status_client.call_async(self.get_status_request)
+            self.get_status_future.add_done_callback(self.get_status_response_callback)
+        else:
+            # Call move to pose service
+            target_pose = Pose()
+            target_pose.position.x = 1.0 + self.call_count * 0.1
+            target_pose.position.y = 0.5 + self.call_count * 0.05
+            target_pose.position.z = 1.2
+            target_pose.orientation.x = 0.0
+            target_pose.orientation.y = 0.0
+            target_pose.orientation.z = 0.0
+            target_pose.orientation.w = 1.0
+            
+            self.move_to_pose_request.target_pose = target_pose
+            self.move_to_pose_request.max_velocity = 0.5
+            self.move_to_pose_request.max_acceleration = 1.0
+            
+            self.move_to_pose_future = self.move_to_pose_client.call_async(self.move_to_pose_request)
+            self.move_to_pose_future.add_done_callback(self.move_to_pose_response_callback)
+        
+        self.call_count += 1
+
+    def get_status_response_callback(self, future):
+        try:
+            response = future.result()
+            self.get_logger().info(
+                f'Status response: Success={response.success}, '
+                f'Battery={response.battery_level:.1f}%, '
+                f'Operational={response.is_operational}'
+            )
+        except Exception as e:
+            self.get_logger().error(f'Service call failed: {e}')
+
+    def move_to_pose_response_callback(self, future):
+        try:
+            response = future.result()
+            self.get_logger().info(
+                f'Move to pose response: Success={response.success}, '
+                f'Message={response.message}, Error Code={response.error_code}'
+            )
+        except Exception as e:
+            self.get_logger().error(f'Service call failed: {e}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    service_client = ServiceClient()
+    
+    try:
+        rclpy.spin(service_client)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        service_client.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 5.2 Update setup.py to include the client
+```python
+entry_points={
+    'console_scripts': [
+        'control_server = humanoid_control_server.control_server:main',
+        'service_client = humanoid_control_server.service_client:main',
+    ],
+},
+```
+
+### 5.3 Make the client script executable
+```bash
+chmod +x ~/ros2_ws/src/humanoid_control_server/humanoid_control_server/service_client.py
+```
+
+## Step 6: Create an Action Server
+
+### 6.1 Create the action server node
+Create `~/ros2_ws/src/humanoid_control_server/humanoid_control_server/walk_action_server.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.node import Node
+from humanoid_services.action import WalkToGoal
+from geometry_msgs.msg import PoseStamped
+import time
+import math
+
+
+class WalkActionServer(Node):
+    def __init__(self):
+        super().__init__('walk_action_server')
+        
+        # Create action server
+        self._action_server = ActionServer(
+            self,
+            WalkToGoal,
+            'walk_to_goal',
+            execute_callback=self.execute_callback,
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback)
+        
+        self.get_logger().info('Walk Action Server initialized')
+
+    def goal_callback(self, goal_request):
+        # Accept all goals
+        self.get_logger().info('Received goal request')
+        return GoalResponse.ACCEPT
+
+    def cancel_callback(self, goal_handle):
+        # Accept all cancel requests
+        self.get_logger().info('Received cancel request')
+        return CancelResponse.ACCEPT
+
+    def execute_callback(self, goal_handle):
+        self.get_logger().info('Executing goal...')
+        
+        # Get goal parameters
+        target_location = goal_handle.request.target_location
+        step_size = goal_handle.request.step_size
+        walking_speed = goal_handle.request.walking_speed
+        
+        # Simulate walking to goal
+        feedback_msg = WalkToGoal.Feedback()
+        result = WalkToGoal.Result()
+        
+        # Calculate distance to goal
+        start_x, start_y = 0.0, 0.0  # Starting position
+        target_x = target_location.pose.position.x
+        target_y = target_location.pose.position.y
+        total_distance = math.sqrt((target_x - start_x)**2 + (target_y - start_y)**2)
+        
+        # Calculate number of steps
+        num_steps = int(total_distance / step_size)
+        
+        steps_completed = 0
+        current_x, current_y = start_x, start_y
+        
+        # Walk to goal
+        for i in range(num_steps):
+            # Check if goal was canceled
+            if goal_handle.is_cancel_requested:
+                result.success = False
+                result.message = "Goal canceled"
+                goal_handle.canceled()
+                self.get_logger().info('Goal canceled')
+                return result
+            
+            # Update position
+            progress = (i + 1) / num_steps
+            current_x = start_x + progress * (target_x - start_x)
+            current_y = start_y + progress * (target_y - start_y)
+            
+            # Calculate remaining distance
+            remaining_distance = math.sqrt((target_x - current_x)**2 + (target_y - current_y)**2)
+            
+            # Update feedback
+            feedback_msg.distance_to_goal = remaining_distance
+            feedback_msg.current_speed = walking_speed
+            feedback_msg.steps_completed = i + 1
+            feedback_msg.status = f"Stepping ({i+1}/{num_steps})"
+            
+            # Publish feedback
+            goal_handle.publish_feedback(feedback_msg)
+            
+            # Simulate walking time
+            time.sleep(1.0 / walking_speed)
+            
+            steps_completed = i + 1
+        
+        # Goal completed
+        goal_handle.succeed()
+        result.success = True
+        result.message = "Successfully walked to goal"
+        result.steps_taken = steps_completed
+        result.distance_traveled = total_distance
+        
+        self.get_logger().info(f'Goal succeeded: {result.message}')
+        return result
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    walk_action_server = WalkActionServer()
+    
+    try:
+        rclpy.spin(walk_action_server)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        walk_action_server.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 6.2 Update setup.py to include the action server
+```python
+entry_points={
+    'console_scripts': [
+        'control_server = humanoid_control_server.control_server:main',
+        'service_client = humanoid_control_server.service_client:main',
+        'walk_action_server = humanoid_control_server.walk_action_server:main',
+    ],
+},
+```
+
+### 6.3 Make the action server script executable
+```bash
+chmod +x ~/ros2_ws/src/humanoid_control_server/humanoid_control_server/walk_action_server.py
+```
+
+## Step 7: Create an Action Client
+
+### 7.1 Create the action client node
+Create `~/ros2_ws/src/humanoid_control_server/humanoid_control_server/action_client.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.node import Node
+from humanoid_services.action import WalkToGoal
+from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
+import time
+
+
+class ActionClientNode(Node):
+    def __init__(self):
+        super().__init__('action_client')
+        
+        # Create action client
+        self._action_client = ActionClient(self, WalkToGoal, 'walk_to_goal')
+        
+        # Wait for action server
+        self.get_logger().info('Waiting for action server...')
+        self._action_client.wait_for_server()
+        self.get_logger().info('Action server available')
+        
+        # Timer to send goals periodically
+        self.timer = self.create_timer(10.0, self.send_goal)
+        self.goal_count = 0
+
+    def send_goal(self):
+        # Create goal message
+        goal_msg = WalkToGoal.Goal()
+        
+        # Set target location
+        target_pose = PoseStamped()
+        target_pose.header.stamp = self.get_clock().now().to_msg()
+        target_pose.header.frame_id = 'map'
+        target_pose.pose.position.x = 2.0 + self.goal_count * 0.5
+        target_pose.pose.position.y = 1.0 + self.goal_count * 0.3
+        target_pose.pose.position.z = 0.0
+        target_pose.pose.orientation.w = 1.0
+        
+        goal_msg.target_location = target_pose
+        goal_msg.step_size = 0.1  # 10cm steps
+        goal_msg.walking_speed = 0.5  # 0.5 steps per second
+        
+        self.get_logger().info(
+            f'Sending goal {self.goal_count + 1} to position '
+            f'({target_pose.pose.position.x:.2f}, {target_pose.pose.position.y:.2f})'
+        )
+        
+        # Send goal
+        self._send_goal_future = self._action_client.send_goal_async(
+            goal_msg,
+            feedback_callback=self.feedback_callback)
+        
+        self._send_goal_future.add_done_callback(self.goal_response_callback)
+        self.goal_count += 1
+
+    def goal_response_callback(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().info('Goal rejected')
+            return
+
+        self.get_logger().info('Goal accepted')
+        
+        # Get result
+        self._get_result_future = goal_handle.get_result_async()
+        self._get_result_future.add_done_callback(self.get_result_callback)
+
+    def feedback_callback(self, feedback_msg):
+        feedback = feedback_msg.feedback
+        self.get_logger().info(
+            f'Feedback: {feedback.status}, '
+            f'Distance to goal: {feedback.distance_to_goal:.2f}m, '
+            f'Steps completed: {feedback.steps_completed}'
+        )
+
+    def get_result_callback(self, future):
+        result = future.result().result
+        self.get_logger().info(f'Result: {result.message}, Success: {result.success}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    action_client = ActionClientNode()
+    
+    try:
+        rclpy.spin(action_client)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        action_client.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 7.2 Update setup.py to include the action client
+```python
+entry_points={
+    'console_scripts': [
+        'control_server = humanoid_control_server.control_server:main',
+        'service_client = humanoid_control_server.service_client:main',
+        'walk_action_server = humanoid_control_server.walk_action_server:main',
+        'action_client = humanoid_control_server.action_client:main',
+    ],
+},
+```
+
+### 7.3 Make the action client script executable
+```bash
+chmod +x ~/ros2_ws/src/humanoid_control_server/humanoid_control_server/action_client.py
+```
+
+## Step 8: Working with Parameters
+
+### 8.1 Create a parameter node
+Create `~/ros2_ws/src/humanoid_control_server/humanoid_control_server/parameter_demo.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+from rcl_interfaces.msg import FloatingPointRange, IntegerRange
+from std_msgs.msg import String
+
+
+class ParameterDemoNode(Node):
+    def __init__(self):
+        super().__init__('parameter_demo')
+        
+        # Declare parameters with descriptions and constraints
+        self.declare_parameter(
+            'robot_name',
+            'Atlas-like_Humanoid',
+            descriptor=ParameterDescriptor(
+                type=ParameterType.PARAMETER_STRING,
+                description='Name of the humanoid robot'
+            )
+        )
+        
+        self.declare_parameter(
+            'max_velocity',
+            0.5,
+            descriptor=ParameterDescriptor(
+                type=ParameterType.PARAMETER_DOUBLE,
+                description='Maximum velocity for movement',
+                floating_point_range=[FloatingPointRange(from_value=0.0, to_value=2.0)]
+            )
+        )
+        
+        self.declare_parameter(
+            'max_acceleration',
+            1.0,
+            descriptor=ParameterDescriptor(
+                type=ParameterType.PARAMETER_DOUBLE,
+                description='Maximum acceleration for movement',
+                floating_point_range=[FloatingPointRange(from_value=0.1, to_value=5.0)]
+            )
+        )
+        
+        self.declare_parameter(
+            'joint_limits',
+            [1.57, 1.57, 1.57, 1.57, 1.57, 1.57],  # 6 joint limits
+            descriptor=ParameterDescriptor(
+                type=ParameterType.PARAMETER_DOUBLE_ARRAY,
+                description='Joint position limits in radians'
+            )
+        )
+        
+        self.declare_parameter(
+            'debug_mode',
+            False,
+            descriptor=ParameterDescriptor(
+                type=ParameterType.PARAMETER_BOOL,
+                description='Enable debug output'
+            )
+        )
+        
+        # Get parameter values
+        self.robot_name = self.get_parameter('robot_name').value
+        self.max_velocity = self.get_parameter('max_velocity').value
+        self.max_acceleration = self.get_parameter('max_acceleration').value
+        self.joint_limits = self.get_parameter('joint_limits').value
+        self.debug_mode = self.get_parameter('debug_mode').value
+        
+        self.get_logger().info(f'Initialized with robot: {self.robot_name}')
+        self.get_logger().info(f'Max velocity: {self.max_velocity}')
+        self.get_logger().info(f'Debug mode: {self.debug_mode}')
+        
+        # Create a publisher to demonstrate parameter usage
+        self.status_pub = self.create_publisher(String, 'robot_status', 10)
+        
+        # Timer to periodically publish status using parameters
+        self.timer = self.create_timer(2.0, self.status_callback)
+        
+        # Callback for parameter changes
+        self.add_on_set_parameters_callback(self.parameter_callback)
+
+    def parameter_callback(self, params):
+        for param in params:
+            if param.name == 'robot_name':
+                self.robot_name = param.value
+                self.get_logger().info(f'Robot name changed to: {self.robot_name}')
+            elif param.name == 'max_velocity':
+                if 0.0 <= param.value <= 2.0:
+                    self.max_velocity = param.value
+                    self.get_logger().info(f'Max velocity changed to: {self.max_velocity}')
+                else:
+                    self.get_logger().warn(f'Invalid max_velocity value: {param.value}')
+                    return rclpy.node.SetParametersResult(successful=False, reason='Value out of range')
+            elif param.name == 'debug_mode':
+                self.debug_mode = param.value
+                self.get_logger().info(f'Debug mode changed to: {self.debug_mode}')
+        
+        return rclpy.node.SetParametersResult(successful=True)
+
+    def status_callback(self):
+        msg = String()
+        msg.data = f'{self.robot_name} - Vel: {self.max_velocity}m/s - Debug: {self.debug_mode}'
+        self.status_pub.publish(msg)
+        
+        if self.debug_mode:
+            self.get_logger().info(f'Debug: Publishing status - {msg.data}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    param_demo = ParameterDemoNode()
+    
+    try:
+        rclpy.spin(param_demo)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        param_demo.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 8.2 Update setup.py to include the parameter demo
+```python
+entry_points={
+    'console_scripts': [
+        'control_server = humanoid_control_server.control_server:main',
+        'service_client = humanoid_control_server.service_client:main',
+        'walk_action_server = humanoid_control_server.walk_action_server:main',
+        'action_client = humanoid_control_server.action_client:main',
+        'parameter_demo = humanoid_control_server.parameter_demo:main',
+    ],
+},
+```
+
+### 8.3 Make the parameter demo script executable
+```bash
+chmod +x ~/ros2_ws/src/humanoid_control_server/humanoid_control_server/parameter_demo.py
+```
+
+## Step 9: Build and Test the Complete System
+
+### 9.1 Build all packages
+```bash
+cd ~/ros2_ws
+colcon build --packages-select humanoid_services humanoid_control_server
+source install/setup.bash
+```
+
+### 9.2 Test services
+Terminal 1 (run the server):
+```bash
+ros2 run humanoid_control_server control_server
+```
+
+Terminal 2 (run the client):
+```bash
+ros2 run humanoid_control_server service_client
+```
+
+### 9.3 Test actions
+Terminal 1 (run the action server):
+```bash
+ros2 run humanoid_control_server walk_action_server
+```
+
+Terminal 2 (run the action client):
+```bash
+ros2 run humanoid_control_server action_client
+```
+
+### 9.4 Test parameters
+Terminal 1 (run the parameter demo):
+```bash
+ros2 run humanoid_control_server parameter_demo
+```
+
+Terminal 2 (change parameters):
+```bash
+# Change robot name
+ros2 param set /parameter_demo robot_name "New_Humanoid_Name"
+
+# Change max velocity
+ros2 param set /parameter_demo max_velocity 0.8
+
+# Enable debug mode
+ros2 param set /parameter_demo debug_mode true
+
+# List all parameters
+ros2 param list
+```
+
+## Step 10: Create a Comprehensive Demo
+
+### 10.1 Create a launch file for the complete system
+Create `~/ros2_ws/src/humanoid_control_server/launch/comprehensive_demo.py`:
+
+```python
+from launch import LaunchDescription
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    return LaunchDescription([
+        # Service server
+        Node(
+            package='humanoid_control_server',
+            executable='control_server',
+            name='control_server',
+            parameters=[
+                # Add parameters here if needed
+            ],
+            output='screen'
+        ),
+        
+        # Action server
+        Node(
+            package='humanoid_control_server',
+            executable='walk_action_server',
+            name='walk_action_server',
+            output='screen'
+        ),
+        
+        # Parameter demo node
+        Node(
+            package='humanoid_control_server',
+            executable='parameter_demo',
+            name='parameter_demo',
+            parameters=[
+                {'robot_name': 'Comprehensive_Demo_Robot'},
+                {'max_velocity': 0.6},
+                {'debug_mode': True}
+            ],
+            output='screen'
+        ),
+        
+        # Service client (to periodically test services)
+        Node(
+            package='humanoid_control_server',
+            executable='service_client',
+            name='service_client',
+            output='screen'
+        ),
+        
+        # Action client (to periodically test actions)
+        Node(
+            package='humanoid_control_server',
+            executable='action_client',
+            name='action_client',
+            output='screen'
+        )
+    ])
+```
+
+### 10.2 Test the complete system
+```bash
+cd ~/ros2_ws
+colcon build --packages-select humanoid_control_server
+source install/setup.bash
+ros2 launch humanoid_control_server comprehensive_demo.py
+```
+
+## Step 11: Advanced Parameter Usage
+
+### 11.1 Create a dynamic parameter configuration
+Create `~/ros2_ws/src/humanoid_control_server/config/robot_params.yaml`:
+
+```yaml
+/**:
+  ros__parameters:
+    robot_name: "Configured_Humanoid"
+    max_velocity: 0.7
+    max_acceleration: 1.2
+    joint_limits:
+      - 1.57
+      - 1.57
+      - 1.57
+      - 1.57
+      - 1.57
+      - 1.57
+    debug_mode: false
+    safety_limits:
+      max_torque: 20.0
+      max_current: 10.0
+      temperature_threshold: 60.0
+```
+
+### 11.2 Create a node that uses the configuration file
+Create `~/ros2_ws/src/humanoid_control_server/humanoid_control_server/configured_demo.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+from std_msgs.msg import String
+
+
+class ConfiguredDemoNode(Node):
+    def __init__(self):
+        super().__init__('configured_demo')
+        
+        # This node will use parameters from the config file
+        # The parameters are declared automatically when loaded from the config
+        
+        # Get parameter values
+        self.robot_name = self.get_parameter('robot_name').value
+        self.max_velocity = self.get_parameter('max_velocity').value
+        self.max_acceleration = self.get_parameter('max_acceleration').value
+        self.joint_limits = self.get_parameter('joint_limits').value
+        self.debug_mode = self.get_parameter('debug_mode').value
+        
+        # Get nested parameters
+        self.safety_limits = {}
+        self.safety_limits['max_torque'] = self.get_parameter('safety_limits.max_torque').value
+        self.safety_limits['max_current'] = self.get_parameter('safety_limits.max_current').value
+        self.safety_limits['temperature_threshold'] = self.get_parameter('safety_limits.temperature_threshold').value
+        
+        self.get_logger().info(f'Configured with robot: {self.robot_name}')
+        self.get_logger().info(f'Max velocity: {self.max_velocity}')
+        self.get_logger().info(f'Safety limits: {self.safety_limits}')
+        
+        # Create publisher
+        self.status_pub = self.create_publisher(String, 'configured_status', 10)
+        
+        # Timer to publish status
+        self.timer = self.create_timer(1.0, self.status_callback)
+
+    def status_callback(self):
+        msg = String()
+        msg.data = f'{self.robot_name} - Vel: {self.max_velocity}m/s - Torque limit: {self.safety_limits["max_torque"]}Nm'
+        self.status_pub.publish(msg)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    configured_demo = ConfiguredDemoNode()
+    
+    try:
+        rclpy.spin(configured_demo)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        configured_demo.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 11.3 Update setup.py to include the configured demo
+```python
+entry_points={
+    'console_scripts': [
+        'control_server = humanoid_control_server.control_server:main',
+        'service_client = humanoid_control_server.service_client:main',
+        'walk_action_server = humanoid_control_server.walk_action_server:main',
+        'action_client = humanoid_control_server.action_client:main',
+        'parameter_demo = humanoid_control_server.parameter_demo:main',
+        'configured_demo = humanoid_control_server.configured_demo:main',
+    ],
+},
+```
+
+### 11.4 Make the configured demo script executable
+```bash
+chmod +x ~/ros2_ws/src/humanoid_control_server/humanoid_control_server/configured_demo.py
+```
+
+### 11.5 Create a launch file that uses the config file
+Create `~/ros2_ws/src/humanoid_control_server/launch/configured_demo_launch.py`:
+
+```python
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
+import os
+
+
+def generate_launch_description():
+    # Get config file path
+    config = os.path.join(
+        get_package_share_directory('humanoid_control_server'),
+        'config',
+        'robot_params.yaml'
+    )
+    
+    return LaunchDescription([
+        Node(
+            package='humanoid_control_server',
+            executable='configured_demo',
+            name='configured_demo',
+            parameters=[config],
+            output='screen'
+        )
+    ])
+```
+
+### 11.6 Build and test the configured demo
+```bash
+cd ~/ros2_ws
+colcon build --packages-select humanoid_control_server
+source install/setup.bash
+ros2 launch humanoid_control_server configured_demo_launch.py
+```
+
+## Troubleshooting
+
+### Common Issues:
+
+1. **Service/Action not found**: Make sure you've built the interface packages first and sourced the workspace
+
+2. **Parameter not declared**: Ensure parameters are declared before being accessed
+
+3. **Action client/server mismatch**: Check that action types match between client and server
+
+4. **Permission errors**: Make sure your Python scripts are executable
+
+## Lab Summary
+
+In this lab, you have:
+- Created custom service and action definitions for humanoid robotics
+- Implemented service servers and clients for request-response communication
+- Created action servers and clients for long-running tasks with feedback
+- Worked with parameters for configuration and dynamic reconfiguration
+- Used configuration files to manage parameters
+- Integrated all communication patterns in a comprehensive demo
+
+## Reflection Questions
+
+1. When would you use a service versus an action in a robotic system?
+2. What are the advantages of using parameters for configuration instead of hardcoding values?
+3. How do actions provide better feedback than services for long-running tasks?
+4. How would you design a safety system that uses services, actions, and parameters?
+
+## Next Steps
+
+After completing this lab, you have a comprehensive understanding of all core communication patterns in ROS 2. You're now ready to tackle more complex robotic systems and integrate these patterns into complete humanoid robotics applications.

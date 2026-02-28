@@ -1,0 +1,853 @@
+---
+title: "Lab 2: Advanced Sensor Simulation in Gazebo"
+sidebar_label: "Lab 2: Advanced Sensors"
+---
+
+# Lab 2: Advanced Sensor Simulation in Gazebo
+
+In this lab, you'll enhance your humanoid robot with advanced sensors including LiDAR, depth cameras, and more sophisticated IMU configurations. You'll learn to simulate realistic sensor data and process it within the ROS2 framework.
+
+## Learning Objectives
+
+By the end of this lab, you will be able to:
+- Add LiDAR sensors to your robot model in Gazebo
+- Configure depth cameras for 3D perception
+- Implement realistic IMU sensor models with noise characteristics
+- Process sensor data streams in ROS2
+- Validate sensor simulation accuracy
+
+## Prerequisites
+
+Before starting this lab, ensure you have:
+- Completed Lab 1: Setting Up Your First Gazebo Simulation
+- Basic understanding of ROS2 topics and message types
+- Experience with URDF and Xacro
+- Basic Python knowledge for ROS2 nodes
+
+## Step 1: Adding a LiDAR Sensor to Your Robot
+
+First, let's add a 3D LiDAR sensor to your robot model. Update your URDF file (`simple_humanoid_description/urdf/humanoid.urdf.xacro`) to include a LiDAR sensor mounted on the head:
+
+```xml
+  <!-- LiDAR Mount Joint -->
+  <joint name="lidar_mount_joint" type="fixed">
+    <parent link="head"/>
+    <child link="lidar_link"/>
+    <origin xyz="0.0 0.0 0.05" rpy="0 0 0"/>
+  </joint>
+
+  <!-- LiDAR Link -->
+  <link name="lidar_link">
+    <visual>
+      <geometry>
+        <cylinder length="0.05" radius="0.05"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0 0 0 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder length="0.05" radius="0.05"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <!-- LiDAR Sensor in Gazebo -->
+  <gazebo reference="lidar_link">
+    <sensor name="lidar" type="gpu_lidar">
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <update_rate>10</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>1</samples>
+            <resolution>1</resolution>
+            <min_angle>0</min_angle>
+            <max_angle>0</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.1</min>
+          <max>30.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </ray>
+      <plugin name="gazebo_ros_lidar" filename="libgazebo_ros_gpu_lidar.so">
+        <ros>
+          <namespace>/simple_humanoid</namespace>
+          <remapping>~/out:=scan</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+      </plugin>
+    </sensor>
+  </gazebo>
+```
+
+## Step 2: Adding a Depth Camera
+
+Next, let's add a depth camera to your robot. Add this to your URDF file:
+
+```xml
+  <!-- Camera Mount Joint -->
+  <joint name="camera_mount_joint" type="fixed">
+    <parent link="head"/>
+    <child link="camera_link"/>
+    <origin xyz="0.05 0.0 0.0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Camera Link -->
+  <link name="camera_link">
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <!-- Depth Camera in Gazebo -->
+  <gazebo reference="camera_link">
+    <sensor name="depth_camera" type="depth">
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <update_rate>30</update_rate>
+      <camera name="head">
+        <horizontal_fov>1.089</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.1</near>
+          <far>10</far>
+        </clip>
+      </camera>
+      <plugin name="camera_controller" filename="libgazebo_ros_openni_kinect.so">
+        <baseline>0.2</baseline>
+        <alwaysOn>true</alwaysOn>
+        <updateRate>30.0</updateRate>
+        <cameraName>simple_humanoid/camera</cameraName>
+        <imageTopicName>rgb/image_raw</imageTopicName>
+        <depthImageTopicName>depth/image_raw</depthImageTopicName>
+        <pointCloudTopicName>depth/points</pointCloudTopicName>
+        <cameraInfoTopicName>rgb/camera_info</cameraInfoTopicName>
+        <depthImageCameraInfoTopicName>depth/camera_info</depthImageCameraInfoName>
+        <frameName>camera_link</frameName>
+        <pointCloudCutoff>0.5</pointCloudCutoff>
+        <pointCloudCutoffMax>3.0</pointCloudCutoffMax>
+        <distortion_k1>0.0</distortion_k1>
+        <distortion_k2>0.0</distortion_k2>
+        <distortion_k3>0.0</distortion_k3>
+        <distortion_t1>0.0</distortion_t1>
+        <distortion_t2>0.0</distortion_t2>
+        <CxPrime>0.0</CxPrime>
+        <Cx>0.0</Cx>
+        <Cy>0.0</Cy>
+        <focalLength>0.0</focalLength>
+        <hackBaseline>0.07</hackBaseline>
+      </plugin>
+    </sensor>
+  </gazebo>
+```
+
+## Step 3: Enhanced IMU Configuration
+
+Update your IMU sensor to include more realistic noise characteristics:
+
+```xml
+  <!-- Enhanced IMU Sensor -->
+  <gazebo reference="base_link">
+    <sensor name="imu_sensor" type="imu">
+      <always_on>true</always_on>
+      <update_rate>100</update_rate>
+      <visualize>false</visualize>
+      <imu>
+        <angular_velocity>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>2e-4</stddev>
+              <bias_mean>0.0000075</bias_mean>
+              <bias_stddev>0.0000008</bias_stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>2e-4</stddev>
+              <bias_mean>0.0000075</bias_mean>
+              <bias_stddev>0.0000008</bias_stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>2e-4</stddev>
+              <bias_mean>0.0000075</bias_mean>
+              <bias_stddev>0.0000008</bias_stddev>
+            </noise>
+          </z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>1.7e-2</stddev>
+              <bias_mean>0.01</bias_mean>
+              <bias_stddev>0.001</bias_stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>1.7e-2</stddev>
+              <bias_mean>0.01</bias_mean>
+              <bias_stddev>0.001</bias_stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>1.7e-2</stddev>
+              <bias_mean>0.01</bias_mean>
+              <bias_stddev>0.001</bias_stddev>
+            </noise>
+          </z>
+        </linear_acceleration>
+      </imu>
+      <plugin name="imu_plugin" filename="libgazebo_ros_imu.so">
+        <ros>
+          <namespace>/simple_humanoid</namespace>
+          <remapping>~/out:=imu/data</remapping>
+        </ros>
+        <initial_orientation_as_reference>false</initial_orientation_as_reference>
+        <update_rate>100</update_rate>
+      </plugin>
+    </sensor>
+  </gazebo>
+```
+
+## Step 4: Creating a Sensor Data Processing Node
+
+Create a ROS2 node to process the sensor data. First, create the directory structure:
+
+```bash
+mkdir -p ~/ros2_ws/src/simple_humanoid_description/src
+```
+
+Create a Python node to subscribe to sensor data and display information:
+
+```python
+# File: ~/ros2_ws/src/simple_humanoid_description/simple_humanoid_description/sensor_processor.py
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import LaserScan, Image, Imu
+from cv_bridge import CvBridge
+import numpy as np
+import math
+
+
+class SensorProcessor(Node):
+    def __init__(self):
+        super().__init__('sensor_processor')
+        
+        # Create subscribers for each sensor
+        self.lidar_subscription = self.create_subscription(
+            LaserScan,
+            '/simple_humanoid/scan',
+            self.lidar_callback,
+            10)
+        
+        self.imu_subscription = self.create_subscription(
+            Imu,
+            '/simple_humanoid/imu/data',
+            self.imu_callback,
+            10)
+        
+        self.depth_subscription = self.create_subscription(
+            Image,
+            '/simple_humanoid/camera/depth/image_raw',
+            self.depth_callback,
+            10)
+        
+        self.rgb_subscription = self.create_subscription(
+            Image,
+            '/simple_humanoid/camera/rgb/image_raw',
+            self.rgb_callback,
+            10)
+        
+        self.bridge = CvBridge()
+        
+        self.get_logger().info('Sensor Processor Node Started')
+    
+    def lidar_callback(self, msg):
+        # Process LiDAR data
+        # Find minimum distance in front of the robot
+        front_scan = msg.ranges[len(msg.ranges)//2 - 50 : len(msg.ranges)//2 + 50]
+        min_distance = min([r for r in front_scan if not math.isnan(r) and r > 0], default=float('inf'))
+        
+        self.get_logger().info(f'Lidar: Min distance in front: {min_distance:.2f}m')
+    
+    def imu_callback(self, msg):
+        # Process IMU data
+        roll, pitch, yaw = self.quaternion_to_euler(
+            msg.orientation.x,
+            msg.orientation.y,
+            msg.orientation.z,
+            msg.orientation.w
+        )
+        
+        self.get_logger().info(f'IMU: Roll={roll:.2f}, Pitch={pitch:.2f}, Yaw={yaw:.2f}')
+    
+    def depth_callback(self, msg):
+        # Process depth image data
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+            # Calculate average depth in center region
+            h, w = cv_image.shape
+            center_region = cv_image[h//2-50:h//2+50, w//2-50:w//2+50]
+            avg_depth = np.nanmean(center_region)
+            
+            if not np.isnan(avg_depth):
+                self.get_logger().info(f'Depth: Avg depth in center: {avg_depth:.2f}m')
+        except Exception as e:
+            self.get_logger().error(f'Error processing depth image: {str(e)}')
+    
+    def rgb_callback(self, msg):
+        # Process RGB image data
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            height, width, channels = cv_image.shape
+            
+            self.get_logger().info(f'RGB: Image received - {width}x{height}')
+        except Exception as e:
+            self.get_logger().error(f'Error processing RGB image: {str(e)}')
+    
+    def quaternion_to_euler(self, x, y, z, w):
+        # Convert quaternion to Euler angles
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = math.atan2(sinr_cosp, cosr_cosp)
+
+        sinp = 2 * (w * y - z * x)
+        pitch = math.asin(sinp)
+
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = math.atan2(siny_cosp, cosy_cosp)
+
+        return roll, pitch, yaw
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    sensor_processor = SensorProcessor()
+    
+    try:
+        rclpy.spin(sensor_processor)
+    except KeyboardInterrupt:
+        pass
+    
+    sensor_processor.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+## Step 5: Updating Package Configuration
+
+Update your `package.xml` file to include the new dependencies:
+
+```xml
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>simple_humanoid_description</name>
+  <version>0.0.0</version>
+  <description>Simple humanoid robot description with sensors</description>
+  <maintainer email="user@todo.todo">user</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>urdf</depend>
+  <depend>xacro</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>cv_bridge</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>rclpy</depend>
+
+  <exec_depend>ros2launch</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>joint_state_publisher_gui</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+```
+
+And update your `setup.py` file:
+
+```python
+from setuptools import setup
+from glob import glob
+import os
+
+package_name = 'simple_humanoid_description'
+
+setup(
+    name=package_name,
+    version='0.0.0',
+    packages=[package_name],
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'urdf'), glob('urdf/*')),
+        (os.path.join('share', package_name, 'meshes'), glob('meshes/*')),
+        (os.path.join('share', package_name, 'worlds'), glob('worlds/*')),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='user',
+    maintainer_email='user@todo.todo',
+    description='Simple humanoid robot description with sensors',
+    license='Apache-2.0',
+    tests_require=['pytest'],
+    entry_points={
+        'console_scripts': [
+            'sensor_processor = simple_humanoid_description.sensor_processor:main',
+        ],
+    },
+)
+```
+
+## Step 6: Creating an Enhanced Launch File
+
+Create an enhanced launch file that starts both the simulation and the sensor processor:
+
+```python
+# File: ~/ros2_ws/src/simple_humanoid_description/launch/enhanced_display.launch.py
+import os
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+from launch.substitutions import Command
+from ament_index_python.packages import get_package_share_directory
+
+
+def generate_launch_description():
+
+    # Get the urdf file
+    robot_desc_path = os.path.join(
+        get_package_share_directory('simple_humanoid_description'),
+        'urdf',
+        'humanoid.urdf.xacro'
+    )
+
+    # Launch configuration variables
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    use_rviz = LaunchConfiguration('use_rviz')
+
+    # Declare launch arguments
+    declare_use_sim_time_cmd = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='true',
+        description='Use simulation (Gazebo) clock if true'
+    )
+
+    declare_use_rviz_cmd = DeclareLaunchArgument(
+        'use_rviz',
+        default_value='true',
+        description='Whether to start RVIZ'
+    )
+
+    # Robot State Publisher node
+    params = {'robot_description': Command(['xacro ', robot_desc_path]), 'use_sim_time': use_sim_time}
+    node_robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        output='screen',
+        parameters=[params]
+    )
+
+    # Gazebo spawn entity node
+    gazebo_spawn_entity = Node(
+        package='gazebo_ros',
+        executable='spawn_entity.py',
+        arguments=['-topic', 'robot_description', '-entity', 'simple_humanoid'],
+        output='screen'
+    )
+
+    # Gazebo server and client nodes
+    gazebo_server = ExecuteProcess(
+        cmd=['gzserver', '--verbose', '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so'],
+        output='screen'
+    )
+
+    gazebo_client = ExecuteProcess(
+        cmd=['gzclient', '--verbose'],
+        output='screen',
+        condition=IfCondition(use_rviz)
+    )
+
+    # Sensor processor node
+    sensor_processor_node = Node(
+        package='simple_humanoid_description',
+        executable='sensor_processor',
+        name='sensor_processor',
+        output='screen'
+    )
+
+    # RViz node
+    rviz_config_path = os.path.join(
+        get_package_share_directory('simple_humanoid_description'),
+        'rviz',
+        'config.rviz'
+    )
+    
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', rviz_config_path],
+        parameters=[{'use_sim_time': use_sim_time}],
+        output='screen',
+        condition=IfCondition(use_rviz)
+    )
+
+    # Create launch description and add actions
+    ld = LaunchDescription()
+
+    # Declare launch options
+    ld.add_action(declare_use_sim_time_cmd)
+    ld.add_action(declare_use_rviz_cmd)
+
+    # Add nodes
+    ld.add_action(gazebo_server)
+    ld.add_action(node_robot_state_publisher)
+    ld.add_action(gazebo_spawn_entity)
+    ld.add_action(gazebo_client)
+    ld.add_action(sensor_processor_node)
+    ld.add_action(rviz_node)
+
+    return ld
+```
+
+## Step 7: Building and Running the Enhanced Simulation
+
+Build your package with the new dependencies:
+
+```bash
+cd ~/ros2_ws
+colcon build --packages-select simple_humanoid_description --symlink-install
+source install/setup.bash
+```
+
+Install the required Python dependencies:
+
+```bash
+pip3 install opencv-python
+```
+
+Now launch the enhanced simulation:
+
+```bash
+ros2 launch simple_humanoid_description enhanced_display.launch.py
+```
+
+In another terminal, run the sensor processor:
+
+```bash
+ros2 run simple_humanoid_description sensor_processor
+```
+
+## Step 8: Validating Sensor Data
+
+Monitor the sensor data streams to verify they're working correctly:
+
+```bash
+# Monitor LiDAR data
+ros2 topic echo /simple_humanoid/scan
+
+# Monitor IMU data
+ros2 topic echo /simple_humanoid/imu/data
+
+# Monitor depth image info
+ros2 topic echo /simple_humanoid/camera/depth/image_raw --field header
+
+# Monitor RGB image info
+ros2 topic echo /simple_humanoid/camera/rgb/image_raw --field header
+```
+
+## Step 9: Creating a Simple Navigation Scenario
+
+Create a simple world file with obstacles for testing your sensors. Create the file `simple_humanoid_description/worlds/simple_obstacles.sdf`:
+
+```xml
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <world name="simple_obstacles">
+    <!-- Include the default outdoor environment -->
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+    <!-- Add some simple obstacles -->
+    <model name="wall_1">
+      <pose>2 0 0.5 0 0 0</pose>
+      <link name="wall_1_link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>4 0.2 1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>4 0.2 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.5 0.5 0.5 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+        <inertial>
+          <mass>100</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+      </link>
+    </model>
+
+    <model name="box_1">
+      <pose>-1 1 0.5 0 0 0</pose>
+      <link name="box_1_link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.2 0.2 1</ambient>
+            <diffuse>0.9 0.3 0.3 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+        <inertial>
+          <mass>100</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+      </link>
+    </model>
+
+    <model name="cylinder_1">
+      <pose>-1 -1 1 0 0 0</pose>
+      <link name="cylinder_1_link">
+        <collision name="collision">
+          <geometry>
+            <cylinder>
+              <radius>0.5</radius>
+              <length>2</length>
+            </cylinder>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.5</radius>
+              <length>2</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0.2 0.8 0.2 1</ambient>
+            <diffuse>0.3 0.9 0.3 1</diffuse>
+            <specular>0.1 0.1 0.1 1</specular>
+          </material>
+        </visual>
+        <inertial>
+          <mass>100</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+      </link>
+    </model>
+  </world>
+</sdf>
+```
+
+## Step 10: Updating the Launch File to Use the Custom World
+
+Modify your launch file to use the custom world:
+
+```python
+# Updated version of the launch file with world specification
+import os
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+from launch.substitutions import Command
+from ament_index_python.packages import get_package_share_directory
+
+
+def generate_launch_description():
+
+    # Get the urdf file
+    robot_desc_path = os.path.join(
+        get_package_share_directory('simple_humanoid_description'),
+        'urdf',
+        'humanoid.urdf.xacro'
+    )
+    
+    # Get the world file
+    world_path = os.path.join(
+        get_package_share_directory('simple_humanoid_description'),
+        'worlds',
+        'simple_obstacles.sdf'
+    )
+
+    # Launch configuration variables
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    use_rviz = LaunchConfiguration('use_rviz')
+
+    # Declare launch arguments
+    declare_use_sim_time_cmd = DeclareLaunchArgument(
+        'use_sim_time',
+        default_value='true',
+        description='Use simulation (Gazebo) clock if true'
+    )
+
+    declare_use_rviz_cmd = DeclareLaunchArgument(
+        'use_rviz',
+        default_value='true',
+        description='Whether to start RVIZ'
+    )
+
+    # Robot State Publisher node
+    params = {'robot_description': Command(['xacro ', robot_desc_path]), 'use_sim_time': use_sim_time}
+    node_robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        output='screen',
+        parameters=[params]
+    )
+
+    # Gazebo server and client nodes
+    gazebo_server = ExecuteProcess(
+        cmd=['gzserver', '--verbose', '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so', world_path],
+        output='screen'
+    )
+
+    gazebo_client = ExecuteProcess(
+        cmd=['gzclient', '--verbose'],
+        output='screen',
+        condition=IfCondition(use_rviz)
+    )
+
+    # Gazebo spawn entity node
+    gazebo_spawn_entity = Node(
+        package='gazebo_ros',
+        executable='spawn_entity.py',
+        arguments=['-topic', 'robot_description', '-entity', 'simple_humanoid', '-x', '0', '-y', '0', '-z', '1'],
+        output='screen'
+    )
+
+    # Sensor processor node
+    sensor_processor_node = Node(
+        package='simple_humanoid_description',
+        executable='sensor_processor',
+        name='sensor_processor',
+        output='screen'
+    )
+
+    # Create launch description and add actions
+    ld = LaunchDescription()
+
+    # Declare launch options
+    ld.add_action(declare_use_sim_time_cmd)
+    ld.add_action(declare_use_rviz_cmd)
+
+    # Add nodes
+    ld.add_action(gazebo_server)
+    ld.add_action(node_robot_state_publisher)
+    ld.add_action(gazebo_spawn_entity)
+    ld.add_action(gazebo_client)
+    ld.add_action(sensor_processor_node)
+
+    return ld
+```
+
+## Lab Summary
+
+In this lab, you:
+- Added LiDAR, depth camera, and enhanced IMU sensors to your robot
+- Created a sensor processing node to handle data streams
+- Validated sensor functionality in a simulated environment
+- Created a custom world with obstacles for testing
+- Learned to configure realistic sensor models with noise characteristics
+
+## Troubleshooting Tips
+
+1. If sensors don't publish data, check that plugins are correctly configured in URDF
+2. If Gazebo crashes, ensure GPU drivers are properly installed for GPU-based sensors
+3. If sensor data seems incorrect, verify coordinate frames and units
+4. If the simulation runs slowly, reduce sensor update rates or simplify models
+
+## Next Steps
+
+In the next lab, you'll explore Unity simulation for humanoid robotics, learning to create photorealistic environments and leverage Unity's ML-Agents for robot learning.

@@ -1,0 +1,1488 @@
+---
+title: "Lab 3: Action Execution and Control Systems"
+sidebar_label: "Lab 3: Action Execution"
+---
+
+# Lab 3: Action Execution and Control Systems
+
+In this final lab of Module 4, you'll implement action execution and control systems that translate interpreted language commands into actual robotic behaviors. You'll learn to create cognitive planners that convert natural language to ROS 2 actions, implement safety mechanisms, and create a complete VLA pipeline that integrates vision, language, and action.
+
+## Learning Objectives
+
+By the end of this lab, you will be able to:
+- Implement cognitive planning systems that translate natural language to robot actions
+- Create action execution frameworks for robotic platforms
+- Integrate vision, language, and action components into a unified VLA system
+- Implement safety mechanisms for language-controlled robots
+- Evaluate the performance of complete VLA systems
+
+## Prerequisites
+
+Before starting this lab, ensure you have:
+- Completed Lab 1: Implementing Vision Systems with CLIP Integration
+- Completed Lab 2: Language Understanding Integration with OpenAI Whisper
+- Basic understanding of ROS 2 concepts and action interfaces
+- Experience with Python programming for robotics
+- Access to a simulated or physical robotic platform
+
+## Step 1: Setting Up the Environment
+
+First, let's install the necessary packages for our action execution system:
+
+```bash
+pip install rclpy
+pip install geometry-msgs
+pip install std-msgs
+pip install action-msgs
+pip install control-msgs
+pip install tf2-ros
+pip install transforms3d
+```
+
+Now let's create a cognitive planning module that translates natural language to robot actions:
+
+### Cognitive Planning Module:
+```python
+import rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import Pose, Point, Quaternion
+from std_msgs.msg import String
+from action_msgs.msg import GoalStatus
+from rclpy.action import ActionClient
+from nav2_msgs.action import NavigateToPose
+from control_msgs.action import FollowJointTrajectory
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from builtin_interfaces.msg import Duration
+import json
+import math
+from typing import Dict, List, Tuple, Optional
+
+class CognitivePlanner(Node):
+    def __init__(self):
+        super().__init__('cognitive_planner')
+        
+        # Action clients for navigation and manipulation
+        self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+        self.manip_client = ActionClient(self, FollowJointTrajectory, 'joint_trajectory_controller/follow_joint_trajectory')
+        
+        # Subscriber for parsed commands from language understanding
+        self.command_sub = self.create_subscription(
+            String,
+            '/parsed_command',
+            self.command_callback,
+            10
+        )
+        
+        # Publisher for execution status
+        self.status_pub = self.create_publisher(String, '/execution_status', 10)
+        
+        # Robot state
+        self.current_pose = None
+        self.robot_capabilities = {
+            'navigation': True,
+            'manipulation': True,
+            'speech': True
+        }
+        
+        self.get_logger().info('Cognitive planner initialized')
+
+    def command_callback(self, msg):
+        """Process parsed commands and execute appropriate actions."""
+        try:
+            # Parse the command structure from JSON string
+            command_structure = json.loads(msg.data.replace("'", '"'))
+            
+            self.get_logger().info(f'Received command: {command_structure}')
+            
+            # Execute the command based on its structure
+            success = self.execute_command_structure(command_structure)
+            
+            # Publish execution status
+            status_msg = String()
+            status_msg.data = f"Command execution {'successful' if success else 'failed'}: {command_structure['raw_command']}"
+            self.status_pub.publish(status_msg)
+            
+        except Exception as e:
+            self.get_logger().error(f'Error processing command: {str(e)}')
+
+    def execute_command_structure(self, command_structure: dict) -> bool:
+        """Execute a command structure by dispatching to appropriate handlers."""
+        success = True
+        
+        for action in command_structure['actions']:
+            action_type = action['type']
+            
+            if action_type == 'navigate':
+                success &= self.execute_navigation_action(action)
+            elif action_type == 'manipulate':
+                success &= self.execute_manipulation_action(action)
+            elif action_type == 'stop':
+                success &= self.execute_stop_action(action)
+            elif action_type == 'respond':
+                success &= self.execute_response_action(action)
+            else:
+                self.get_logger().warn(f'Unknown action type: {action_type}')
+                success = False
+        
+        return success
+
+    def execute_navigation_action(self, action: dict) -> bool:
+        """Execute navigation action."""
+        destination = action.get('destination', 'unknown')
+        self.get_logger().info(f'Navigating to {destination}')
+        
+        # In a real implementation, you would look up the location in a semantic map
+        # For this example, we'll use a simple mapping
+        pose = self.get_pose_for_location(destination)
+        
+        if pose is None:
+            self.get_logger().error(f'Unknown destination: {destination}')
+            return False
+        
+        return self.send_navigation_goal(pose)
+
+    def execute_manipulation_action(self, action: dict) -> bool:
+        """Execute manipulation action."""
+        obj = action.get('object', 'unknown')
+        color = action.get('color', 'any')
+        self.get_logger().info(f'Manipulating {color} {obj}')
+        
+        # In a real implementation, you would:
+        # 1. Use vision system to locate the object
+        # 2. Plan a grasping trajectory
+        # 3. Execute the manipulation
+        
+        # For this example, we'll simulate a simple manipulation
+        return self.simulate_manipulation(obj, color)
+
+    def execute_stop_action(self, action: dict) -> bool:
+        """Execute stop action."""
+        self.get_logger().info('Stopping robot')
+        
+        # Send zero velocity command
+        return self.send_stop_command()
+
+    def execute_response_action(self, action: dict) -> bool:
+        """Execute response action."""
+        response = action.get('response', 'Affirmative.')
+        self.get_logger().info(f'Response: {response}')
+        
+        # In a real implementation, this would trigger speech synthesis
+        # For this example, we'll just log the response
+        return True
+
+    def get_pose_for_location(self, location: str) -> Optional[Pose]:
+        """Get pose for a named location."""
+        # This would normally come from a semantic map
+        # For this example, we'll use a simple lookup
+        location_poses = {
+            'kitchen': Pose(position=Point(x=2.0, y=1.0, z=0.0), 
+                           orientation=Quaternion(w=1.0, x=0.0, y=0.0, z=0.0)),
+            'living room': Pose(position=Point(x=0.0, y=0.0, z=0.0), 
+                              orientation=Quaternion(w=1.0, x=0.0, y=0.0, z=0.0)),
+            'bedroom': Pose(position=Point(x=-1.0, y=2.0, z=0.0), 
+                          orientation=Quaternion(w=1.0, x=0.0, y=0.0, z=0.0)),
+            'office': Pose(position=Point(x=1.5, y=-1.0, z=0.0), 
+                         orientation=Quaternion(w=1.0, x=0.0, y=0.0, z=0.0)),
+        }
+        
+        return location_poses.get(location.lower())
+
+    def send_navigation_goal(self, pose: Pose) -> bool:
+        """Send navigation goal to Nav2."""
+        # Wait for action server
+        if not self.nav_client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().error('Navigation action server not available')
+            return False
+        
+        # Create navigation goal
+        goal_msg = NavigateToPose.Goal()
+        goal_msg.pose.header.frame_id = 'map'
+        goal_msg.pose.pose = pose
+        
+        # Send goal
+        self.nav_future = self.nav_client.send_goal_async(goal_msg)
+        self.nav_future.add_done_callback(self.navigation_goal_response_callback)
+        
+        return True
+
+    def navigation_goal_response_callback(self, future):
+        """Handle navigation goal response."""
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().info('Navigation goal rejected')
+            return
+        
+        self.get_logger().info('Navigation goal accepted')
+        # Wait for result
+        self.nav_result_future = goal_handle.get_result_async()
+        self.nav_result_future.add_done_callback(self.navigation_result_callback)
+
+    def navigation_result_callback(self, future):
+        """Handle navigation result."""
+        result = future.result().result
+        status = future.result().status
+        
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info('Navigation succeeded')
+        else:
+            self.get_logger().info(f'Navigation failed with status: {status}')
+
+    def simulate_manipulation(self, obj: str, color: str) -> bool:
+        """Simulate manipulation action."""
+        # In a real implementation, this would control the robot's manipulator
+        # For this example, we'll just simulate the action
+        self.get_logger().info(f'Simulating manipulation of {color} {obj}')
+        
+        # Create a simple trajectory for the manipulator
+        trajectory = self.create_simple_manipulation_trajectory()
+        
+        if trajectory:
+            return self.send_manipulation_trajectory(trajectory)
+        else:
+            return False
+
+    def create_simple_manipulation_trajectory(self) -> Optional[JointTrajectory]:
+        """Create a simple manipulation trajectory."""
+        # This is a simplified example - in reality, you'd plan based on object location
+        trajectory = JointTrajectory()
+        trajectory.joint_names = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6']
+        
+        # Create trajectory points
+        point1 = JointTrajectoryPoint()
+        point1.positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Home position
+        point1.time_from_start = Duration(sec=2, nanosec=0)
+        
+        point2 = JointTrajectoryPoint()
+        point2.positions = [0.5, 0.3, -0.2, 0.1, 0.0, 0.0]  # Reach position
+        point2.time_from_start = Duration(sec=4, nanosec=0)
+        
+        point3 = JointTrajectoryPoint()
+        point3.positions = [0.5, 0.3, -0.2, 0.1, 0.0, 0.0]  # Grip position
+        point3.time_from_start = Duration(sec=5, nanosec=0)
+        
+        point4 = JointTrajectoryPoint()
+        point4.positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Return to home
+        point4.time_from_start = Duration(sec=7, nanosec=0)
+        
+        trajectory.points = [point1, point2, point3, point4]
+        
+        return trajectory
+
+    def send_manipulation_trajectory(self, trajectory: JointTrajectory) -> bool:
+        """Send manipulation trajectory to controller."""
+        # Wait for action server
+        if not self.manip_client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().error('Manipulation action server not available')
+            return False
+        
+        # Create manipulation goal
+        goal_msg = FollowJointTrajectory.Goal()
+        goal_msg.trajectory = trajectory
+        
+        # Send goal
+        self.manip_future = self.manip_client.send_goal_async(goal_msg)
+        self.manip_future.add_done_callback(self.manipulation_goal_response_callback)
+        
+        return True
+
+    def manipulation_goal_response_callback(self, future):
+        """Handle manipulation goal response."""
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().info('Manipulation goal rejected')
+            return
+        
+        self.get_logger().info('Manipulation goal accepted')
+        # Wait for result
+        self.manip_result_future = goal_handle.get_result_async()
+        self.manip_result_future.add_done_callback(self.manipulation_result_callback)
+
+    def manipulation_result_callback(self, future):
+        """Handle manipulation result."""
+        result = future.result().result
+        status = future.result().status
+        
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info('Manipulation succeeded')
+        else:
+            self.get_logger().info(f'Manipulation failed with status: {status}')
+
+    def send_stop_command(self) -> bool:
+        """Send stop command to robot."""
+        # In a real implementation, you would send zero velocity commands
+        # For this example, we'll just log the action
+        self.get_logger().info('Stop command sent')
+        return True
+
+def main(args=None):
+    rclpy.init(args=args)
+    
+    planner = CognitivePlanner()
+    
+    try:
+        rclpy.spin(planner)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        planner.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+## Step 2: Implementing Safety Mechanisms
+
+Now let's implement safety mechanisms for our language-controlled robot:
+
+### Safety Manager:
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String, Bool
+from sensor_msgs.msg import LaserScan, PointCloud2
+from geometry_msgs.msg import Twist
+from builtin_interfaces.msg import Duration
+from rclpy.qos import QoSProfile, qos_profile_sensor_data
+import math
+from typing import List, Tuple
+
+class SafetyManager(Node):
+    def __init__(self):
+        super().__init__('safety_manager')
+        
+        # Publishers
+        self.safety_status_pub = self.create_publisher(Bool, '/safety_status', 10)
+        self.emergency_stop_pub = self.create_publisher(Bool, '/emergency_stop', 10)
+        self.velocity_limit_pub = self.create_publisher(Twist, '/velocity_limit', 10)
+        
+        # Subscribers
+        self.scan_sub = self.create_subscription(
+            LaserScan,
+            '/scan',
+            self.scan_callback,
+            qos_profile=qos_profile_sensor_data
+        )
+        
+        self.command_sub = self.create_subscription(
+            String,
+            '/parsed_command',
+            self.command_callback,
+            10
+        )
+        
+        self.velocity_sub = self.create_subscription(
+            Twist,
+            '/cmd_vel',
+            self.velocity_callback,
+            10
+        )
+        
+        # Timer for periodic safety checks
+        self.safety_timer = self.create_timer(0.1, self.periodic_safety_check)
+        
+        # Safety parameters
+        self.safety_radius = 0.5  # meters
+        self.human_proximity_threshold = 1.0  # meters
+        self.velocity_limit = 0.5  # m/s
+        self.angular_velocity_limit = 0.5  # rad/s
+        
+        # State variables
+        self.current_scan = None
+        self.last_command = None
+        self.current_velocity = Twist()
+        self.safety_engaged = False
+        self.humans_nearby = False
+        
+        self.get_logger().info('Safety manager initialized')
+
+    def scan_callback(self, msg):
+        """Process laser scan data for safety checks."""
+        self.current_scan = msg
+        
+        # Check for obstacles in safety radius
+        if self.scan_has_obstacles_in_radius(msg, self.safety_radius):
+            self.safety_engaged = True
+            self.publish_emergency_stop()
+        else:
+            self.safety_engaged = False
+        
+        # Check for humans in proximity
+        if self.scan_has_humans_in_proximity(msg, self.human_proximity_threshold):
+            self.humans_nearby = True
+        else:
+            self.humans_nearby = False
+
+    def command_callback(self, msg):
+        """Process commands for safety validation."""
+        self.last_command = msg.data
+        
+        # Check if command is safe to execute
+        if not self.is_command_safe(msg.data):
+            self.get_logger().warn(f'Potentially unsafe command detected: {msg.data}')
+            # Could implement command filtering here
+
+    def velocity_callback(self, msg):
+        """Monitor current velocity for safety."""
+        self.current_velocity = msg
+
+    def periodic_safety_check(self):
+        """Perform periodic safety checks."""
+        # Check if robot is moving unsafely
+        if self.is_moving_unsafely():
+            self.limit_velocity()
+        
+        # Publish safety status
+        safety_status = Bool()
+        safety_status.data = not self.safety_engaged
+        self.safety_status_pub.publish(safety_status)
+
+    def scan_has_obstacles_in_radius(self, scan_msg, radius):
+        """Check if there are obstacles within the specified radius."""
+        if not scan_msg.ranges:
+            return False
+        
+        # Check distances in the front arc (±30 degrees)
+        total_beams = len(scan_msg.ranges)
+        center_idx = total_beams // 2
+        arc_width = int(30 * (total_beams / (2 * math.pi)))  # Convert 30 degrees to beams
+        
+        start_idx = max(center_idx - arc_width, 0)
+        end_idx = min(center_idx + arc_width, total_beams - 1)
+        
+        for i in range(start_idx, end_idx + 1):
+            if not math.isnan(scan_msg.ranges[i]) and scan_msg.ranges[i] < radius:
+                return True
+        
+        return False
+
+    def scan_has_humans_in_proximity(self, scan_msg, threshold):
+        """Check if humans are in proximity based on scan data."""
+        # This is a simplified check - in reality, you'd use more sophisticated
+        # human detection algorithms
+        if not scan_msg.ranges:
+            return False
+        
+        # Check for clusters of points that might indicate humans
+        # This is a basic implementation looking for consistent distances
+        # that might indicate a person-sized obstacle
+        distances = [r for r in scan_msg.ranges if not math.isnan(r) and r < threshold]
+        
+        # If many points are at similar distances, it might be a human
+        if len(distances) > 10:  # Arbitrary threshold
+            # Calculate standard deviation to see if distances are clustered
+            mean_dist = sum(distances) / len(distances)
+            variance = sum((x - mean_dist) ** 2 for x in distances) / len(distances)
+            std_dev = math.sqrt(variance)
+            
+            # If standard deviation is low, points are clustered (possibly human-shaped)
+            if std_dev < 0.3:  # 30cm threshold
+                return True
+        
+        return False
+
+    def is_command_safe(self, command_str):
+        """Check if a command is safe to execute."""
+        # Check for prohibited actions
+        prohibited_actions = ["harm", "damage", "destroy", "attack", "kill", "break"]
+        command_lower = command_str.lower()
+        
+        for action in prohibited_actions:
+            if action in command_lower:
+                return False
+        
+        # Check for commands that might be unsafe near humans
+        if self.humans_nearby:
+            potentially_unsafe_commands = ["move", "go", "navigate", "drive", "approach"]
+            for cmd in potentially_unsafe_commands:
+                if cmd in command_lower:
+                    # Slow down or stop if humans are nearby
+                    self.velocity_limit *= 0.5
+                    break
+        
+        return True
+
+    def is_moving_unsafely(self):
+        """Check if the robot is moving unsafely."""
+        # Check linear velocity
+        linear_speed = math.sqrt(
+            self.current_velocity.linear.x ** 2 +
+            self.current_velocity.linear.y ** 2 +
+            self.current_velocity.linear.z ** 2
+        )
+        
+        if linear_speed > self.velocity_limit:
+            return True
+        
+        # Check angular velocity
+        angular_speed = math.sqrt(
+            self.current_velocity.angular.x ** 2 +
+            self.current_velocity.angular.y ** 2 +
+            self.current_velocity.angular.z ** 2
+        )
+        
+        if angular_speed > self.angular_velocity_limit:
+            return True
+        
+        return False
+
+    def limit_velocity(self):
+        """Limit the robot's velocity for safety."""
+        limited_velocity = Twist()
+        
+        # Limit linear velocity
+        linear_speed = math.sqrt(
+            self.current_velocity.linear.x ** 2 +
+            self.current_velocity.linear.y ** 2 +
+            self.current_velocity.linear.z ** 2
+        )
+        
+        if linear_speed > self.velocity_limit:
+            scale = self.velocity_limit / linear_speed
+            limited_velocity.linear.x = self.current_velocity.linear.x * scale
+            limited_velocity.linear.y = self.current_velocity.linear.y * scale
+            limited_velocity.linear.z = self.current_velocity.linear.z * scale
+        else:
+            limited_velocity.linear = self.current_velocity.linear
+        
+        # Limit angular velocity
+        angular_speed = math.sqrt(
+            self.current_velocity.angular.x ** 2 +
+            self.current_velocity.angular.y ** 2 +
+            self.current_velocity.angular.z ** 2
+        )
+        
+        if angular_speed > self.angular_velocity_limit:
+            scale = self.angular_velocity_limit / angular_speed
+            limited_velocity.angular.x = self.current_velocity.angular.x * scale
+            limited_velocity.angular.y = self.current_velocity.angular.y * scale
+            limited_velocity.angular.z = self.current_velocity.angular.z * scale
+        else:
+            limited_velocity.angular = self.current_velocity.angular
+        
+        # Publish limited velocity
+        self.velocity_limit_pub.publish(limited_velocity)
+
+    def publish_emergency_stop(self):
+        """Publish emergency stop command."""
+        stop_msg = Bool()
+        stop_msg.data = True
+        self.emergency_stop_pub.publish(stop_msg)
+        self.get_logger().warn('EMERGENCY STOP ACTIVATED')
+
+def main(args=None):
+    rclpy.init(args=args)
+    
+    safety_manager = SafetyManager()
+    
+    try:
+        rclpy.spin(safety_manager)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        safety_manager.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+## Step 3: Creating a Complete VLA System
+
+Now let's create a complete VLA system that integrates all components:
+
+### Complete VLA System:
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String, Bool
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Image, LaserScan
+from cv_bridge import CvBridge
+import json
+import threading
+import time
+from typing import Dict, Any
+
+class VLASystem(Node):
+    def __init__(self):
+        super().__init__('vla_system')
+        
+        # Initialize components
+        self.vision_component = VisionComponent(self)
+        self.language_component = LanguageComponent(self)
+        self.action_component = ActionComponent(self)
+        self.safety_component = SafetyComponent(self)
+        
+        # Publishers
+        self.system_status_pub = self.create_publisher(String, '/vla_system_status', 10)
+        
+        # Timer for system monitoring
+        self.monitor_timer = self.create_timer(1.0, self.system_monitor)
+        
+        # System state
+        self.system_active = True
+        self.components_initialized = {
+            'vision': False,
+            'language': False,
+            'action': False,
+            'safety': False
+        }
+        
+        self.get_logger().info('Complete VLA system initialized')
+
+    def system_monitor(self):
+        """Monitor the status of all VLA components."""
+        status_msg = String()
+        
+        # Check if all components are active
+        all_active = all(self.components_initialized.values())
+        
+        if all_active:
+            status_msg.data = "VLA System: ALL COMPONENTS ACTIVE"
+        else:
+            inactive_components = [comp for comp, active in self.components_initialized.items() if not active]
+            status_msg.data = f"VLA System: INACTIVE COMPONENTS - {', '.join(inactive_components)}"
+        
+        self.system_status_pub.publish(status_msg)
+
+    def activate_system(self):
+        """Activate the VLA system."""
+        self.system_active = True
+        self.get_logger().info('VLA system activated')
+
+    def deactivate_system(self):
+        """Deactivate the VLA system."""
+        self.system_active = False
+        self.get_logger().info('VLA system deactivated')
+
+class VisionComponent:
+    def __init__(self, parent_node):
+        self.node = parent_node
+        self.bridge = CvBridge()
+        
+        # Subscribe to camera data
+        self.image_sub = parent_node.create_subscription(
+            Image,
+            '/camera/image_raw',
+            self.image_callback,
+            10
+        )
+        
+        # Publisher for vision results
+        self.vision_result_pub = parent_node.create_publisher(String, '/vision_results', 10)
+        
+        # Mark as initialized
+        parent_node.components_initialized['vision'] = True
+        
+        parent_node.get_logger().info('Vision component initialized')
+
+    def image_callback(self, msg):
+        """Process incoming images."""
+        try:
+            # Convert ROS image to OpenCV image
+            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            
+            # Process image (in a real implementation, this would use CLIP or similar)
+            # For this example, we'll just acknowledge receipt
+            result = {
+                'timestamp': time.time(),
+                'processed': True,
+                'objects_detected': []  # Would contain actual detections in real implementation
+            }
+            
+            # Publish vision results
+            result_msg = String()
+            result_msg.data = json.dumps(result)
+            self.vision_result_pub.publish(result_msg)
+            
+        except Exception as e:
+            self.node.get_logger().error(f'Error processing image: {str(e)}')
+
+class LanguageComponent:
+    def __init__(self, parent_node):
+        self.node = parent_node
+        
+        # Subscribe to audio commands
+        self.audio_command_sub = parent_node.create_subscription(
+            String,
+            '/transcribed_audio',
+            self.audio_command_callback,
+            10
+        )
+        
+        # Publisher for parsed commands
+        self.parsed_command_pub = parent_node.create_publisher(String, '/parsed_command', 10)
+        
+        # Mark as initialized
+        parent_node.components_initialized['language'] = True
+        
+        parent_node.get_logger().info('Language component initialized')
+
+    def audio_command_callback(self, msg):
+        """Process incoming audio commands."""
+        try:
+            # In a real implementation, this would parse the command using NLP
+            # For this example, we'll just pass it through with basic processing
+            command_text = msg.data
+            
+            # Basic command parsing (simplified)
+            parsed_command = self.parse_command(command_text)
+            
+            # Publish parsed command
+            parsed_msg = String()
+            parsed_msg.data = json.dumps(parsed_command)
+            self.parsed_command_pub.publish(parsed_msg)
+            
+        except Exception as e:
+            self.node.get_logger().error(f'Error processing audio command: {str(e)}')
+
+    def parse_command(self, command_text):
+        """Parse a command string into structured format."""
+        # Simplified parsing - in reality, this would use more sophisticated NLP
+        command_lower = command_text.lower()
+        
+        # Determine intent
+        if any(word in command_lower for word in ["go to", "navigate", "move to"]):
+            intent = "navigate"
+        elif any(word in command_lower for word in ["pick up", "grab", "take"]):
+            intent = "manipulate"
+        elif any(word in command_lower for word in ["stop", "halt", "cease"]):
+            intent = "stop"
+        else:
+            intent = "unknown"
+        
+        # Extract entities (simplified)
+        entities = {}
+        if "kitchen" in command_lower:
+            entities["location"] = "kitchen"
+        elif "living room" in command_lower:
+            entities["location"] = "living room"
+        elif "bedroom" in command_lower:
+            entities["location"] = "bedroom"
+        
+        if "cup" in command_lower:
+            entities["object"] = "cup"
+        elif "book" in command_lower:
+            entities["object"] = "book"
+        elif "pen" in command_lower:
+            entities["object"] = "pen"
+        
+        return {
+            "raw_command": command_text,
+            "intent": intent,
+            "entities": entities,
+            "confidence": 0.8  # Simplified confidence
+        }
+
+class ActionComponent:
+    def __init__(self, parent_node):
+        self.node = parent_node
+        
+        # Subscribe to parsed commands
+        self.parsed_command_sub = parent_node.create_subscription(
+            String,
+            '/parsed_command',
+            self.parsed_command_callback,
+            10
+        )
+        
+        # Publisher for action execution status
+        self.action_status_pub = parent_node.create_publisher(String, '/action_status', 10)
+        
+        # Mark as initialized
+        parent_node.components_initialized['action'] = True
+        
+        parent_node.get_logger().info('Action component initialized')
+
+    def parsed_command_callback(self, msg):
+        """Process parsed commands and execute actions."""
+        try:
+            command_structure = json.loads(msg.data)
+            
+            # Execute the command (simplified)
+            success = self.execute_command(command_structure)
+            
+            # Publish execution status
+            status_msg = String()
+            status_msg.data = f"Action {'succeeded' if success else 'failed'}: {command_structure['raw_command']}"
+            self.action_status_pub.publish(status_msg)
+            
+        except Exception as e:
+            self.node.get_logger().error(f'Error executing command: {str(e)}')
+
+    def execute_command(self, command_structure):
+        """Execute a command structure."""
+        intent = command_structure.get('intent', 'unknown')
+        
+        if intent == 'navigate':
+            return self.execute_navigation(command_structure)
+        elif intent == 'manipulate':
+            return self.execute_manipulation(command_structure)
+        elif intent == 'stop':
+            return self.execute_stop(command_structure)
+        else:
+            self.node.get_logger().warn(f'Unknown intent: {intent}')
+            return False
+
+    def execute_navigation(self, command_structure):
+        """Execute navigation command."""
+        entities = command_structure.get('entities', {})
+        location = entities.get('location', 'unknown')
+        
+        self.node.get_logger().info(f'Navigating to {location}')
+        
+        # In a real implementation, this would send navigation goals
+        # For this example, we'll just simulate
+        time.sleep(1)  # Simulate execution time
+        
+        return True
+
+    def execute_manipulation(self, command_structure):
+        """Execute manipulation command."""
+        entities = command_structure.get('entities', {})
+        obj = entities.get('object', 'unknown')
+        
+        self.node.get_logger().info(f'Manipulating {obj}')
+        
+        # In a real implementation, this would send manipulation commands
+        # For this example, we'll just simulate
+        time.sleep(1)  # Simulate execution time
+        
+        return True
+
+    def execute_stop(self, command_structure):
+        """Execute stop command."""
+        self.node.get_logger().info('Stopping robot')
+        
+        # In a real implementation, this would send stop commands
+        # For this example, we'll just simulate
+        time.sleep(0.1)  # Simulate execution time
+        
+        return True
+
+class SafetyComponent:
+    def __init__(self, parent_node):
+        self.node = parent_node
+        
+        # Subscribe to safety-critical data
+        self.scan_sub = parent_node.create_subscription(
+            LaserScan,
+            '/scan',
+            self.scan_callback,
+            10
+        )
+        
+        # Publisher for safety status
+        self.safety_status_pub = parent_node.create_publisher(Bool, '/safety_status', 10)
+        
+        # Mark as initialized
+        parent_node.components_initialized['safety'] = True
+        
+        parent_node.get_logger().info('Safety component initialized')
+
+    def scan_callback(self, msg):
+        """Process laser scan for safety checks."""
+        # Perform safety checks based on scan data
+        is_safe = self.check_environment_safety(msg)
+        
+        # Publish safety status
+        safety_msg = Bool()
+        safety_msg.data = is_safe
+        self.safety_status_pub.publish(safety_msg)
+
+    def check_environment_safety(self, scan_msg):
+        """Check if environment is safe for robot operation."""
+        # Check for obstacles in path (simplified)
+        if scan_msg.ranges:
+            # Check front arc for obstacles
+            total_beams = len(scan_msg.ranges)
+            center_idx = total_beams // 2
+            arc_width = int(30 * (total_beams / (2 * 3.14159)))  # 30 degrees
+            
+            start_idx = max(center_idx - arc_width, 0)
+            end_idx = min(center_idx + arc_width, total_beams - 1)
+            
+            for i in range(start_idx, end_idx + 1):
+                if not math.isnan(scan_msg.ranges[i]) and scan_msg.ranges[i] < 0.5:  # 0.5m threshold
+                    return False  # Unsafe - obstacle too close
+        
+        return True  # Safe
+
+def main(args=None):
+    rclpy.init(args=args)
+    
+    vla_system = VLASystem()
+    
+    try:
+        vla_system.activate_system()
+        rclpy.spin(vla_system)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        vla_system.deactivate_system()
+        vla_system.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+## Step 4: Creating a VLA Integration Node
+
+Let's create a main integration node that brings all components together:
+
+### VLA Integration Node:
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String, Bool
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Image, LaserScan
+from cv_bridge import CvBridge
+import json
+import threading
+import time
+from typing import Dict, Any, Optional
+import math
+
+class VLAIntegrationNode(Node):
+    def __init__(self):
+        super().__init__('vla_integration_node')
+        
+        # Initialize CV bridge
+        self.cv_bridge = CvBridge()
+        
+        # Publishers
+        self.status_pub = self.create_publisher(String, '/vla_integration_status', 10)
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        
+        # Subscribers
+        self.vision_sub = self.create_subscription(
+            String,
+            '/vision_results',
+            self.vision_callback,
+            10
+        )
+        
+        self.language_sub = self.create_subscription(
+            String,
+            '/parsed_command',
+            self.language_callback,
+            10
+        )
+        
+        self.safety_sub = self.create_subscription(
+            Bool,
+            '/safety_status',
+            self.safety_callback,
+            10
+        )
+        
+        # Timer for main control loop
+        self.control_timer = self.create_timer(0.1, self.main_control_loop)
+        
+        # System state
+        self.vision_data = None
+        self.language_command = None
+        self.is_safe = True
+        self.last_command_time = time.time()
+        self.command_timeout = 10.0  # seconds
+        
+        # Robot state
+        self.robot_pose = None
+        self.robot_velocity = Twist()
+        
+        self.get_logger().info('VLA Integration Node initialized')
+
+    def vision_callback(self, msg):
+        """Handle vision processing results."""
+        try:
+            self.vision_data = json.loads(msg.data)
+            self.get_logger().debug(f'Updated vision data: {self.vision_data}')
+        except Exception as e:
+            self.get_logger().error(f'Error processing vision data: {str(e)}')
+
+    def language_callback(self, msg):
+        """Handle language processing results."""
+        try:
+            self.language_command = json.loads(msg.data)
+            self.last_command_time = time.time()
+            self.get_logger().info(f'New command received: {self.language_command["raw_command"]}')
+        except Exception as e:
+            self.get_logger().error(f'Error processing language data: {str(e)}')
+
+    def safety_callback(self, msg):
+        """Handle safety status updates."""
+        self.is_safe = msg.data
+        if not self.is_safe:
+            self.get_logger().warn('Safety system indicates unsafe conditions')
+
+    def main_control_loop(self):
+        """Main control loop that integrates vision, language, and action."""
+        current_time = time.time()
+        
+        # Check for command timeout
+        if current_time - self.last_command_time > self.command_timeout:
+            # No recent commands, possibly enter idle state
+            self.execute_idle_behavior()
+            return
+        
+        # Only proceed if we have a command and it's safe
+        if self.language_command and self.is_safe:
+            self.execute_command_based_on_context()
+        elif not self.is_safe:
+            self.execute_safety_protocol()
+        else:
+            # No command but safe, possibly enter standby
+            self.execute_standby_behavior()
+
+    def execute_command_based_on_context(self):
+        """Execute command considering current context and vision data."""
+        if not self.language_command:
+            return
+        
+        # Get context from vision data
+        context = self.get_context_from_vision()
+        
+        # Modify command based on context if needed
+        adjusted_command = self.adjust_command_for_context(self.language_command, context)
+        
+        # Execute the command
+        success = self.execute_adjusted_command(adjusted_command)
+        
+        if success:
+            self.get_logger().info(f'Successfully executed command: {adjusted_command["raw_command"]}')
+        else:
+            self.get_logger().error(f'Failed to execute command: {adjusted_command["raw_command"]}')
+        
+        # Clear the command after execution
+        self.language_command = None
+
+    def get_context_from_vision(self):
+        """Extract context from vision data."""
+        if not self.vision_data:
+            return {}
+        
+        # Extract relevant context information
+        context = {
+            'objects_detected': self.vision_data.get('objects_detected', []),
+            'environment': self.vision_data.get('environment', 'unknown'),
+            'timestamp': self.vision_data.get('timestamp', 0)
+        }
+        
+        return context
+
+    def adjust_command_for_context(self, command, context):
+        """Adjust command based on current context."""
+        adjusted_command = command.copy()
+        
+        # Example adjustment: if command is to navigate to "kitchen" but vision shows obstacles
+        if (command.get('intent') == 'navigate' and 
+            command.get('entities', {}).get('location') == 'kitchen' and
+            context.get('objects_detected')):
+            
+            # Check if path to kitchen is blocked
+            if self.is_path_blocked(context):
+                # Modify command to find alternative route or wait
+                adjusted_command['requires_alternative'] = True
+                self.get_logger().info('Path to kitchen appears blocked, adjusting plan')
+        
+        return adjusted_command
+
+    def is_path_blocked(self, context):
+        """Check if the path to the destination is blocked."""
+        # This is a simplified check - in reality, you'd use more sophisticated
+        # path planning algorithms
+        objects = context.get('objects_detected', [])
+        
+        # If there are many large objects detected, path might be blocked
+        large_objects = [obj for obj in objects if obj.get('size', 0) > 0.5]  # Objects > 0.5m
+        return len(large_objects) > 2
+
+    def execute_adjusted_command(self, command):
+        """Execute an adjusted command."""
+        intent = command.get('intent', 'unknown')
+        
+        if intent == 'navigate':
+            return self.execute_navigation_command(command)
+        elif intent == 'manipulate':
+            return self.execute_manipulation_command(command)
+        elif intent == 'stop':
+            return self.execute_stop_command(command)
+        else:
+            self.get_logger().warn(f'Unknown command intent: {intent}')
+            return False
+
+    def execute_navigation_command(self, command):
+        """Execute navigation command."""
+        entities = command.get('entities', {})
+        destination = entities.get('location', 'unknown')
+        
+        self.get_logger().info(f'Navigating to {destination}')
+        
+        # In a real implementation, this would send navigation goals to Nav2
+        # For this example, we'll simulate with velocity commands
+        
+        # Simple navigation simulation
+        cmd_vel = Twist()
+        cmd_vel.linear.x = 0.3  # Move forward at 0.3 m/s
+        cmd_vel.angular.z = 0.0  # No turning initially
+        
+        # Publish command for 3 seconds (simulated navigation to destination)
+        start_time = time.time()
+        while time.time() - start_time < 3.0:
+            if not self.is_safe:
+                self.execute_safety_protocol()
+                return False
+            self.cmd_vel_pub.publish(cmd_vel)
+            time.sleep(0.1)
+        
+        # Stop robot
+        stop_cmd = Twist()
+        self.cmd_vel_pub.publish(stop_cmd)
+        
+        return True
+
+    def execute_manipulation_command(self, command):
+        """Execute manipulation command."""
+        entities = command.get('entities', {})
+        obj = entities.get('object', 'unknown')
+        
+        self.get_logger().info(f'Manipulating {obj}')
+        
+        # In a real implementation, this would send manipulation commands
+        # For this example, we'll simulate with a pause
+        time.sleep(2.0)
+        
+        return True
+
+    def execute_stop_command(self, command):
+        """Execute stop command."""
+        self.get_logger().info('Stopping robot')
+        
+        # Send stop command
+        stop_cmd = Twist()
+        self.cmd_vel_pub.publish(stop_cmd)
+        
+        return True
+
+    def execute_idle_behavior(self):
+        """Execute idle behavior when no commands are received."""
+        # Stop the robot
+        stop_cmd = Twist()
+        self.cmd_vel_pub.publish(stop_cmd)
+        
+        # Possibly look around or enter low-power mode
+        self.get_logger().info('Entered idle state - no commands received recently')
+
+    def execute_standby_behavior(self):
+        """Execute standby behavior."""
+        # Robot is safe but waiting for commands
+        stop_cmd = Twist()
+        self.cmd_vel_pub.publish(stop_cmd)
+
+    def execute_safety_protocol(self):
+        """Execute safety protocol when unsafe conditions detected."""
+        self.get_logger().warn('Executing safety protocol')
+        
+        # Immediate stop
+        stop_cmd = Twist()
+        self.cmd_vel_pub.publish(stop_cmd)
+        
+        # Possibly trigger emergency procedures
+        status_msg = String()
+        status_msg.data = "SAFETY PROTOCOL ACTIVATED - STOPPED"
+        self.status_pub.publish(status_msg)
+
+def main(args=None):
+    rclpy.init(args=args)
+    
+    integration_node = VLAIntegrationNode()
+    
+    try:
+        rclpy.spin(integration_node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        integration_node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+## Step 5: Testing the Complete VLA System
+
+Let's create a test script to validate our complete VLA system:
+
+### VLA System Test:
+```python
+import rclpy
+from std_msgs.msg import String, Bool
+from geometry_msgs.msg import Twist
+import time
+import json
+
+def test_vla_system():
+    """Test the complete VLA system."""
+    print("Testing Complete VLA System...")
+    
+    # Initialize ROS context
+    rclpy.init()
+    
+    # Create test node
+    test_node = rclpy.create_node('vla_test_node')
+    
+    # Create publishers to simulate inputs
+    vision_pub = test_node.create_publisher(String, '/vision_results', 10)
+    language_pub = test_node.create_publisher(String, '/parsed_command', 10)
+    safety_pub = test_node.create_publisher(Bool, '/safety_status', 10)
+    
+    # Create subscriber for outputs
+    status_sub = test_node.create_subscription(
+        String, 
+        '/vla_integration_status', 
+        lambda msg: print(f"Status: {msg.data}"),
+        10
+    )
+    
+    cmd_vel_sub = test_node.create_subscription(
+        Twist,
+        '/cmd_vel',
+        lambda msg: print(f"Velocity: linear={msg.linear.x}, angular={msg.angular.z}"),
+        10
+    )
+    
+    print("Publishing test data...")
+    
+    # Publish safety status (safe)
+    safety_msg = Bool()
+    safety_msg.data = True
+    safety_pub.publish(safety_msg)
+    
+    # Publish vision results
+    vision_data = {
+        'timestamp': time.time(),
+        'processed': True,
+        'objects_detected': [
+            {'name': 'cup', 'position': [1.0, 0.5, 0.0], 'size': 0.1},
+            {'name': 'table', 'position': [1.5, 0.0, 0.0], 'size': 1.0}
+        ],
+        'environment': 'kitchen'
+    }
+    vision_msg = String()
+    vision_msg.data = json.dumps(vision_data)
+    vision_pub.publish(vision_msg)
+    
+    # Publish a language command
+    command_data = {
+        'raw_command': 'Go to the kitchen',
+        'intent': 'navigate',
+        'entities': {'location': 'kitchen'},
+        'confidence': 0.9
+    }
+    language_msg = String()
+    language_msg.data = json.dumps(command_data)
+    language_pub.publish(language_msg)
+    
+    print("Test data published. Let system process for 5 seconds...")
+    
+    # Let the system process for a few seconds
+    start_time = time.time()
+    while time.time() - start_time < 5.0:
+        rclpy.spin_once(test_node, timeout_sec=0.1)
+        time.sleep(0.1)
+    
+    # Publish a manipulation command
+    manipulation_command = {
+        'raw_command': 'Pick up the red cup',
+        'intent': 'manipulate',
+        'entities': {'object': 'cup', 'color': 'red'},
+        'confidence': 0.85
+    }
+    language_msg.data = json.dumps(manipulation_command)
+    language_pub.publish(language_msg)
+    
+    print("Published manipulation command. Let system process for 5 seconds...")
+    
+    # Let the system process for more time
+    start_time = time.time()
+    while time.time() - start_time < 5.0:
+        rclpy.spin_once(test_node, timeout_sec=0.1)
+        time.sleep(0.1)
+    
+    # Test safety protocol
+    print("Testing safety protocol...")
+    safety_msg.data = False  # Unsafe
+    safety_pub.publish(safety_msg)
+    
+    print("Published unsafe status. Let system react for 2 seconds...")
+    
+    start_time = time.time()
+    while time.time() - start_time < 2.0:
+        rclpy.spin_once(test_node, timeout_sec=0.1)
+        time.sleep(0.1)
+    
+    # Cleanup
+    test_node.destroy_node()
+    rclpy.shutdown()
+    
+    print("VLA system test completed.")
+
+def test_individual_components():
+    """Test individual components of the VLA system."""
+    print("\nTesting Individual Components...")
+    
+    # Test cognitive planner
+    print("Testing Cognitive Planner...")
+    from cognitive_planner import CognitivePlanner
+    
+    # Test safety manager
+    print("Testing Safety Manager...")
+    from safety_manager import SafetyManager
+    
+    # Test VLA integration
+    print("Testing VLA Integration...")
+    from vla_integration_node import VLAIntegrationNode
+    
+    print("Individual component tests completed.")
+
+def main():
+    print("Starting VLA System Tests...\n")
+    
+    test_individual_components()
+    test_vla_system()
+    
+    print("\nAll VLA system tests completed!")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Step 6: Running the Complete VLA System
+
+1. First, run the individual component tests:
+   ```bash
+   python vla_test.py
+   ```
+
+2. To run the complete VLA integration node:
+   ```bash
+   ros2 run your_package_name vla_integration_node
+   ```
+
+3. To run the safety manager:
+   ```bash
+   ros2 run your_package_name safety_manager
+   ```
+
+4. To run the cognitive planner:
+   ```bash
+   ros2 run your_package_name cognitive_planner
+   ```
+
+## Step 7: Evaluating Performance
+
+Monitor the performance of your complete VLA system:
+
+1. Check system integration:
+   ```bash
+   # Monitor all relevant topics
+   ros2 topic echo /vla_system_status
+   ros2 topic echo /vla_integration_status
+   ros2 topic echo /execution_status
+   ```
+
+2. Evaluate task completion rates:
+   ```python
+   # Example evaluation script
+   import rclpy
+   from std_msgs.msg import String
+   import time
+   
+   class VLAEvaluator:
+       def __init__(self):
+           rclpy.init()
+           self.node = rclpy.create_node('vla_evaluator')
+           
+           # Track metrics
+           self.total_commands = 0
+           self.successful_executions = 0
+           self.safety_violations = 0
+           
+           # Subscribe to relevant topics
+           self.status_sub = self.node.create_subscription(
+               String, '/execution_status', self.status_callback, 10
+           )
+           
+       def status_callback(self, msg):
+           """Track execution status."""
+           self.total_commands += 1
+           if 'successful' in msg.data:
+               self.successful_executions += 1
+           elif 'failed' in msg.data:
+               print(f"Failed command: {msg.data}")
+       
+       def get_metrics(self):
+           """Get performance metrics."""
+           success_rate = self.successful_executions / self.total_commands if self.total_commands > 0 else 0
+           return {
+               'success_rate': success_rate,
+               'total_commands': self.total_commands,
+               'successful_executions': self.successful_executions
+           }
+   
+   # Run evaluation
+   evaluator = VLAEvaluator()
+   
+   print("Running VLA system evaluation for 60 seconds...")
+   start_time = time.time()
+   while time.time() - start_time < 60:
+       rclpy.spin_once(evaluator.node, timeout_sec=0.1)
+   
+   metrics = evaluator.get_metrics()
+   print(f"VLA System Performance Metrics:")
+   print(f"  Success Rate: {metrics['success_rate']:.2f}")
+   print(f"  Total Commands: {metrics['total_commands']}")
+   print(f"  Successful Executions: {metrics['successful_executions']}")
+   
+   evaluator.node.destroy_node()
+   rclpy.shutdown()
+   ```
+
+## Lab Summary
+
+In this lab, you:
+- Implemented cognitive planning systems that translate natural language to robot actions
+- Created action execution frameworks for robotic platforms
+- Integrated vision, language, and action components into a unified VLA system
+- Implemented safety mechanisms for language-controlled robots
+- Evaluated the performance of complete VLA systems
+
+## Troubleshooting Tips
+
+1. If the system doesn't respond to commands, check that all nodes are running and communicating properly
+2. If safety mechanisms are too restrictive, adjust the safety thresholds in the SafetyManager
+3. If navigation fails, verify that Nav2 is properly configured and running
+4. If the system is not integrating properly, check ROS 2 topic connections with `ros2 topic list`
+
+## Module Conclusion
+
+Congratulations! You've completed all three labs for Module 4: Vision-Language-Action (VLA) Models. You now have a comprehensive understanding of:
+
+1. Implementing vision systems with CLIP integration
+2. Integrating language understanding with OpenAI Whisper
+3. Creating action execution and control systems
+4. Integrating all components into a complete VLA system
+5. Implementing safety mechanisms for language-controlled robots
+
+You've built a complete VLA system that can:
+- Process visual input and extract meaningful features
+- Recognize and interpret voice commands using Whisper
+- Translate natural language to robot actions
+- Execute complex tasks safely in real-world environments
+- Integrate all components into a cohesive system
+
+This completes Module 4 of the Physical AI & Humanoid Robotics course. The knowledge and skills you've gained will serve as a foundation for developing advanced embodied AI systems that can understand and interact with the world through natural language.

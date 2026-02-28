@@ -1,0 +1,776 @@
+---
+title: Lab 2 - Creating ROS 2 Nodes and Topics
+sidebar_label: "Lab 2: Nodes and Topics"
+---
+
+# Lab 2: Creating ROS 2 Nodes and Topics
+
+## Objective
+
+In this lab, you will deepen your understanding of ROS 2 nodes and topics by creating more complex publisher-subscriber systems. You will work with custom message types, explore Quality of Service (QoS) settings, and implement a humanoid robot state publisher.
+
+## Prerequisites
+
+- Completion of Lab 1
+- Basic understanding of Python
+- ROS 2 development environment set up
+
+## Duration
+
+Estimated time: 90-120 minutes
+
+## Safety Warning ⚠️
+
+This lab involves software development for robotic systems. While there are no immediate physical safety risks during development, always consider safety implications when working with actual robotic hardware. Ensure any code tested on hardware has appropriate safety checks.
+
+## Step 1: Create a Custom Message
+
+### 1.1 Create a message package
+```bash
+cd ~/ros2_ws/src
+ros2 pkg create --build-type ament_cmake humanoid_msgs
+```
+
+### 1.2 Create the message directory
+```bash
+mkdir -p ~/ros2_ws/src/humanoid_msgs/msg
+```
+
+### 1.3 Define a custom message
+Create `~/ros2_ws/src/humanoid_msgs/msg/HumanoidState.msg`:
+
+```
+# Humanoid robot state message
+string robot_name
+float64 torso_height
+float64[6] joint_positions  # Position of 6 main joints
+float64[6] joint_velocities # Velocity of 6 main joints
+float64[6] joint_efforts    # Effort of 6 main joints
+geometry_msgs/Pose base_pose
+builtin_interfaces/Time timestamp
+bool in_motion
+bool is_balanced
+```
+
+### 1.4 Update CMakeLists.txt
+Edit `~/ros2_ws/src/humanoid_msgs/CMakeLists.txt`:
+
+```cmake
+cmake_minimum_required(VERSION 3.8)
+project(humanoid_msgs)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(builtin_interfaces REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+# Define message files
+set(msg_files
+  "msg/HumanoidState.msg"
+)
+
+# Generate messages
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${msg_files}
+  DEPENDENCIES builtin_interfaces geometry_msgs
+  ADD_LINTER_TESTS
+)
+
+ament_package()
+```
+
+### 1.5 Update package.xml
+Edit `~/ros2_ws/src/humanoid_msgs/package.xml`:
+
+```xml
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>humanoid_msgs</name>
+  <version>0.0.1</version>
+  <description>Custom messages for humanoid robotics</description>
+  <maintainer email="developer@example.com">Your Name</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>builtin_interfaces</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+```
+
+## Step 2: Build the Message Package
+
+### 2.1 Build the workspace
+```bash
+cd ~/ros2_ws
+colcon build --packages-select humanoid_msgs
+source install/setup.bash
+```
+
+### 2.2 Verify the message
+```bash
+ros2 interface show humanoid_msgs/msg/HumanoidState
+```
+
+## Step 3: Create a Humanoid State Publisher
+
+### 3.1 Create a new package for the publisher
+```bash
+cd ~/ros2_ws/src
+ros2 pkg create --build-type ament_python humanoid_state_publisher --dependencies rclpy std_msgs geometry_msgs humanoid_msgs
+```
+
+### 3.2 Create the publisher node
+Create `~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/state_publisher.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+import math
+from builtin_interfaces.msg import Time
+from geometry_msgs.msg import Pose, Point, Quaternion
+from humanoid_msgs.msg import HumanoidState
+
+
+class HumanoidStatePublisher(Node):
+    def __init__(self):
+        super().__init__('humanoid_state_publisher')
+        
+        # Create a QoS profile for robot state (reliable, keep last)
+        qos_profile = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST
+        )
+        
+        self.publisher = self.create_publisher(HumanoidState, 'humanoid_state', qos_profile)
+        
+        # Timer to publish state at 50 Hz
+        timer_period = 0.02  # seconds (50 Hz)
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+        
+        # Initialize state variables
+        self.i = 0
+        self.robot_name = "Atlas-like_Humanoid"
+        self.torso_height = 1.2  # meters
+        self.joint_positions = [0.0] * 6  # 6 main joints
+        self.joint_velocities = [0.0] * 6
+        self.joint_efforts = [0.0] * 6
+        self.base_pose = Pose()
+        self.in_motion = False
+        self.is_balanced = True
+
+    def timer_callback(self):
+        msg = HumanoidState()
+        
+        # Set robot name
+        msg.robot_name = self.robot_name
+        
+        # Simulate torso height variation
+        msg.torso_height = self.torso_height + 0.05 * math.sin(self.i * 0.1)
+        
+        # Simulate joint positions (oscillating for demonstration)
+        for j in range(6):
+            self.joint_positions[j] = 0.5 * math.sin(self.i * 0.05 + j)
+            self.joint_velocities[j] = 0.5 * 0.05 * math.cos(self.i * 0.05 + j)
+            self.joint_efforts[j] = 0.1 * self.joint_positions[j]  # Simulated effort
+        
+        msg.joint_positions = self.joint_positions
+        msg.joint_velocities = self.joint_velocities
+        msg.joint_efforts = self.joint_efforts
+        
+        # Simulate base pose movement
+        self.base_pose.position.x = 0.1 * math.sin(self.i * 0.02)
+        self.base_pose.position.y = 0.05 * math.cos(self.i * 0.02)
+        self.base_pose.position.z = msg.torso_height
+        
+        # Simple orientation (no rotation for now)
+        self.base_pose.orientation.x = 0.0
+        self.base_pose.orientation.y = 0.0
+        self.base_pose.orientation.z = 0.0
+        self.base_pose.orientation.w = 1.0
+        
+        msg.base_pose = self.base_pose
+        
+        # Set timestamp
+        current_time = self.get_clock().now().to_msg()
+        msg.timestamp = current_time
+        
+        # Simulate motion state
+        msg.in_motion = abs(0.1 * math.cos(self.i * 0.02)) > 0.05
+        msg.is_balanced = True  # For now, always balanced
+        
+        self.publisher.publish(msg)
+        self.get_logger().info(f'Published state: {msg.robot_name}, height: {msg.torso_height:.3f}m')
+        
+        self.i += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    humanoid_state_publisher = HumanoidStatePublisher()
+    
+    try:
+        rclpy.spin(humanoid_state_publisher)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        humanoid_state_publisher.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 3.3 Make the script executable and update setup.py
+```bash
+chmod +x ~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/state_publisher.py
+```
+
+Edit `~/ros2_ws/src/humanoid_state_publisher/setup.py` to add the entry point:
+
+```python
+entry_points={
+    'console_scripts': [
+        'state_publisher = humanoid_state_publisher.state_publisher:main',
+    ],
+},
+```
+
+## Step 4: Create a Humanoid State Subscriber
+
+### 4.1 Create the subscriber node
+Create `~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/state_subscriber.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from humanoid_msgs.msg import HumanoidState
+
+
+class HumanoidStateSubscriber(Node):
+    def __init__(self):
+        super().__init__('humanoid_state_subscriber')
+        
+        # Create a QoS profile matching the publisher
+        qos_profile = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST
+        )
+        
+        self.subscription = self.create_subscription(
+            HumanoidState,
+            'humanoid_state',
+            self.listener_callback,
+            qos_profile)
+        self.subscription  # prevent unused variable warning
+
+    def listener_callback(self, msg):
+        self.get_logger().info(f'\nReceived state for: {msg.robot_name}')
+        self.get_logger().info(f'Torso height: {msg.torso_height:.3f}m')
+        self.get_logger().info(f'Joint positions: {[f"{pos:.3f}" for pos in msg.joint_positions]}')
+        self.get_logger().info(f'Base position: ({msg.base_pose.position.x:.3f}, {msg.base_pose.position.y:.3f}, {msg.base_pose.position.z:.3f})')
+        self.get_logger().info(f'In motion: {msg.in_motion}, Balanced: {msg.is_balanced}')
+        self.get_logger().info(f'Timestamp: {msg.timestamp.sec}.{msg.timestamp.nanosec}')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    humanoid_state_subscriber = HumanoidStateSubscriber()
+    
+    try:
+        rclpy.spin(humanoid_state_subscriber)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        humanoid_state_subscriber.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 4.2 Update setup.py to include the subscriber
+Add to the `entry_points` section in `setup.py`:
+
+```python
+entry_points={
+    'console_scripts': [
+        'state_publisher = humanoid_state_publisher.state_publisher:main',
+        'state_subscriber = humanoid_state_publisher.state_subscriber:main',
+    ],
+},
+```
+
+### 4.3 Make the subscriber script executable
+```bash
+chmod +x ~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/state_subscriber.py
+```
+
+## Step 5: Build and Test the Publisher-Subscriber System
+
+### 5.1 Build the packages
+```bash
+cd ~/ros2_ws
+colcon build --packages-select humanoid_msgs humanoid_state_publisher
+source install/setup.bash
+```
+
+### 5.2 Run the publisher
+Terminal 1:
+```bash
+ros2 run humanoid_state_publisher state_publisher
+```
+
+### 5.3 Run the subscriber in another terminal
+Terminal 2:
+```bash
+ros2 run humanoid_state_publisher state_subscriber
+```
+
+You should see the publisher sending state messages and the subscriber receiving and displaying them.
+
+## Step 6: Explore Quality of Service (QoS) Settings
+
+### 6.1 Create a QoS comparison node
+Create `~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/qos_demo.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from std_msgs.msg import String
+
+
+class QoSDemo(Node):
+    def __init__(self):
+        super().__init__('qos_demo')
+        
+        # Create publishers with different QoS profiles
+        # Reliable communication (for critical data)
+        reliable_qos = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE
+        )
+        self.reliable_publisher = self.create_publisher(String, 'reliable_topic', reliable_qos)
+        
+        # Best effort communication (for less critical data like sensor streams)
+        best_effort_qos = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE
+        )
+        self.best_effort_publisher = self.create_publisher(String, 'best_effort_topic', best_effort_qos)
+        
+        # Timer to publish messages
+        timer_period = 1.0  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.i = 0
+
+    def timer_callback(self):
+        # Publish to reliable topic
+        reliable_msg = String()
+        reliable_msg.data = f'Reliable message {self.i}'
+        self.reliable_publisher.publish(reliable_msg)
+        self.get_logger().info(f'Published reliably: "{reliable_msg.data}"')
+        
+        # Publish to best effort topic
+        best_effort_msg = String()
+        best_effort_msg.data = f'Best effort message {self.i}'
+        self.best_effort_publisher.publish(best_effort_msg)
+        self.get_logger().info(f'Published with best effort: "{best_effort_msg.data}"')
+        
+        self.i += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    qos_demo = QoSDemo()
+    
+    try:
+        rclpy.spin(qos_demo)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        qos_demo.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 6.2 Update setup.py to include the QoS demo
+```python
+entry_points={
+    'console_scripts': [
+        'state_publisher = humanoid_state_publisher.state_publisher:main',
+        'state_subscriber = humanoid_state_publisher.state_subscriber:main',
+        'qos_demo = humanoid_state_publisher.qos_demo:main',
+    ],
+},
+```
+
+### 6.3 Make the script executable and rebuild
+```bash
+chmod +x ~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/qos_demo.py
+cd ~/ros2_ws
+colcon build --packages-select humanoid_state_publisher
+source install/setup.bash
+```
+
+### 6.4 Test different QoS settings
+Terminal 1:
+```bash
+ros2 run humanoid_state_publisher qos_demo
+```
+
+Terminal 2:
+```bash
+# Listen to reliable topic
+source install/setup.bash
+ros2 topic echo /reliable_topic std_msgs/msg/String --qos-reliability reliable
+```
+
+Terminal 3:
+```bash
+# Listen to best effort topic
+source install/setup.bash
+ros2 topic echo /best_effort_topic std_msgs/msg/String --qos-reliability best_effort
+```
+
+## Step 7: Create a Multi-Topic Publisher
+
+### 7.1 Create a sensor publisher
+Create `~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/sensor_publisher.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from sensor_msgs.msg import JointState, Imu
+from std_msgs.msg import Header
+import math
+
+
+class SensorPublisher(Node):
+    def __init__(self):
+        super().__init__('sensor_publisher')
+        
+        # Create publishers for different sensor types
+        joint_qos = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST
+        )
+        self.joint_pub = self.create_publisher(JointState, 'joint_states', joint_qos)
+        
+        imu_qos = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST
+        )
+        self.imu_pub = self.create_publisher(Imu, 'imu/data', imu_qos)
+        
+        # Timer to publish sensor data
+        timer_period = 0.02  # 50 Hz
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.i = 0
+
+    def timer_callback(self):
+        # Publish joint states
+        joint_msg = JointState()
+        joint_msg.header = Header()
+        joint_msg.header.stamp = self.get_clock().now().to_msg()
+        joint_msg.name = ['hip_joint', 'knee_joint', 'ankle_joint', 
+                         'shoulder_joint', 'elbow_joint', 'wrist_joint']
+        
+        # Simulate joint positions
+        joint_msg.position = []
+        for j in range(6):
+            pos = 0.5 * math.sin(self.i * 0.05 + j)
+            joint_msg.position.append(pos)
+        
+        # Simulate joint velocities
+        joint_msg.velocity = []
+        for j in range(6):
+            vel = 0.5 * 0.05 * math.cos(self.i * 0.05 + j)
+            joint_msg.velocity.append(vel)
+        
+        # Simulate joint efforts
+        joint_msg.effort = []
+        for j in range(6):
+            effort = 0.1 * joint_msg.position[j]
+            joint_msg.effort.append(effort)
+        
+        self.joint_pub.publish(joint_msg)
+        
+        # Publish IMU data
+        imu_msg = Imu()
+        imu_msg.header = Header()
+        imu_msg.header.stamp = self.get_clock().now().to_msg()
+        imu_msg.header.frame_id = 'imu_link'
+        
+        # Simulate orientation (simple for demonstration)
+        imu_msg.orientation.x = 0.0
+        imu_msg.orientation.y = 0.0
+        imu_msg.orientation.z = math.sin(self.i * 0.01) * 0.1
+        imu_msg.orientation.w = math.cos(self.i * 0.01) * 0.1
+        
+        # Simulate angular velocity
+        imu_msg.angular_velocity.x = 0.01 * math.cos(self.i * 0.01)
+        imu_msg.angular_velocity.y = -0.01 * math.sin(self.i * 0.01)
+        imu_msg.angular_velocity.z = 0.0
+        
+        # Simulate linear acceleration
+        imu_msg.linear_acceleration.x = 0.5 * math.cos(self.i * 0.02)
+        imu_msg.linear_acceleration.y = -0.5 * math.sin(self.i * 0.02)
+        imu_msg.linear_acceleration.z = 9.81  # Gravity
+        
+        self.imu_pub.publish(imu_msg)
+        
+        self.get_logger().info(f'Published sensor data - Joint pos: {[f"{p:.3f}" for p in joint_msg.position[:3]]}')
+        self.i += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    sensor_publisher = SensorPublisher()
+    
+    try:
+        rclpy.spin(sensor_publisher)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sensor_publisher.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 7.2 Update setup.py to include the sensor publisher
+```python
+entry_points={
+    'console_scripts': [
+        'state_publisher = humanoid_state_publisher.state_publisher:main',
+        'state_subscriber = humanoid_state_publisher.state_subscriber:main',
+        'qos_demo = humanoid_state_publisher.qos_demo:main',
+        'sensor_publisher = humanoid_state_publisher.sensor_publisher:main',
+    ],
+},
+```
+
+### 7.3 Make the script executable and rebuild
+```bash
+chmod +x ~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/sensor_publisher.py
+cd ~/ros2_ws
+colcon build --packages-select humanoid_state_publisher
+source install/setup.bash
+```
+
+## Step 8: Test the Complete System
+
+### 8.1 Run all nodes together
+Terminal 1:
+```bash
+ros2 run humanoid_state_publisher state_publisher
+```
+
+Terminal 2:
+```bash
+ros2 run humanoid_state_publisher sensor_publisher
+```
+
+Terminal 3:
+```bash
+ros2 run humanoid_state_publisher state_subscriber
+```
+
+Terminal 4 (monitor joint states):
+```bash
+source install/setup.bash
+ros2 topic echo /joint_states sensor_msgs/msg/JointState
+```
+
+### 8.2 Visualize with rqt
+```bash
+rqt --force-discover
+# Use Plugins > Introspection > Node Graph to see the connections
+```
+
+## Step 9: Create a Topic Analysis Node
+
+### 9.1 Create a topic analysis node
+Create `~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/topic_analyzer.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from sensor_msgs.msg import JointState
+from humanoid_msgs.msg import HumanoidState
+import time
+
+
+class TopicAnalyzer(Node):
+    def __init__(self):
+        super().__init__('topic_analyzer')
+        
+        # Track message statistics
+        self.message_counts = {
+            'humanoid_state': 0,
+            'joint_states': 0,
+            'analysis': 0
+        }
+        
+        self.start_time = time.time()
+        
+        # Subscriptions
+        self.humanoid_sub = self.create_subscription(
+            HumanoidState, 'humanoid_state', self.humanoid_callback, 10)
+        
+        self.joint_sub = self.create_subscription(
+            JointState, 'joint_states', self.joint_callback, 10)
+        
+        # Publisher for analysis results
+        self.analysis_pub = self.create_publisher(String, 'analysis_results', 10)
+        
+        # Timer for periodic analysis
+        self.analysis_timer = self.create_timer(5.0, self.analysis_callback)
+
+    def humanoid_callback(self, msg):
+        self.message_counts['humanoid_state'] += 1
+
+    def joint_callback(self, msg):
+        self.message_counts['joint_states'] += 1
+
+    def analysis_callback(self):
+        current_time = time.time()
+        elapsed_time = current_time - self.start_time
+        self.message_counts['analysis'] += 1
+        
+        # Calculate rates
+        hz_hs = self.message_counts['humanoid_state'] / elapsed_time if elapsed_time > 0 else 0
+        hz_js = self.message_counts['joint_states'] / elapsed_time if elapsed_time > 0 else 0
+        
+        analysis_msg = String()
+        analysis_msg.data = (
+            f"Analysis #{self.message_counts['analysis']}: "
+            f"HumanoidState: {self.message_counts['humanoid_state']} msgs "
+            f"({hz_hs:.2f} Hz), "
+            f"JointStates: {self.message_counts['joint_states']} msgs "
+            f"({hz_js:.2f} Hz), "
+            f"Runtime: {elapsed_time:.1f}s"
+        )
+        
+        self.analysis_pub.publish(analysis_msg)
+        self.get_logger().info(analysis_msg.data)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    topic_analyzer = TopicAnalyzer()
+    
+    try:
+        rclpy.spin(topic_analyzer)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        topic_analyzer.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 9.2 Update setup.py to include the analyzer
+```python
+entry_points={
+    'console_scripts': [
+        'state_publisher = humanoid_state_publisher.state_publisher:main',
+        'state_subscriber = humanoid_state_publisher.state_subscriber:main',
+        'qos_demo = humanoid_state_publisher.qos_demo:main',
+        'sensor_publisher = humanoid_state_publisher.sensor_publisher:main',
+        'topic_analyzer = humanoid_state_publisher.topic_analyzer:main',
+    ],
+},
+```
+
+### 9.3 Make executable and rebuild
+```bash
+chmod +x ~/ros2_ws/src/humanoid_state_publisher/humanoid_state_publisher/topic_analyzer.py
+cd ~/ros2_ws
+colcon build --packages-select humanoid_state_publisher
+source install/setup.bash
+```
+
+## Troubleshooting
+
+### Common Issues:
+
+1. **Message not found**: Make sure you've built the message package first and sourced the workspace
+
+2. **QoS mismatch**: Ensure publisher and subscriber QoS profiles are compatible
+
+3. **Package not found**: Check that all dependencies are properly declared in package.xml
+
+4. **Permission errors**: Make sure your Python scripts are executable
+
+## Lab Summary
+
+In this lab, you have:
+- Created custom message types for humanoid robotics
+- Implemented publisher-subscriber systems with custom messages
+- Explored Quality of Service (QoS) settings and their impact
+- Created a multi-topic publisher for sensor data
+- Analyzed message rates and system performance
+- Used proper ROS 2 patterns for humanoid robot state representation
+
+## Reflection Questions
+
+1. Why is it important to use appropriate QoS settings for different types of robotic data?
+2. How do custom message types improve the organization and clarity of robotic systems?
+3. What are the advantages of separating different sensor streams into different topics?
+4. How would you modify the system to handle multiple humanoid robots simultaneously?
+
+## Next Steps
+
+After completing this lab, you have a solid foundation in ROS 2 nodes and topics. In the next lab, you'll explore services, actions, and parameters - other important communication patterns in ROS 2.

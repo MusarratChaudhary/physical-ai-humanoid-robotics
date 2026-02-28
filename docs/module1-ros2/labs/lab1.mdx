@@ -1,0 +1,415 @@
+---
+title: Lab 1 - Setting up ROS 2 Environment
+sidebar_label: "Lab 1: Environment Setup"
+---
+
+# Lab 1: Setting up ROS 2 Environment
+
+## Objective
+
+In this lab, you will set up a complete ROS 2 development environment for humanoid robotics applications. You will install ROS 2, create your first workspace, and run basic ROS 2 commands to verify your installation.
+
+## Prerequisites
+
+- A computer running Ubuntu 22.04 LTS (or use Windows with WSL2)
+- Basic command-line knowledge
+- Internet connection for package installation
+
+## Duration
+
+Estimated time: 60-90 minutes
+
+## Safety Warning ⚠️
+
+This lab involves software installation and configuration. While there are no physical safety risks, ensure you follow installation instructions carefully to avoid system issues. Always backup important data before making system changes.
+
+## Step 1: Install ROS 2 (Humble Hawksbill)
+
+### 1.1 Set locale
+```bash
+locale  # check for UTF-8
+
+sudo apt update && sudo apt install locales
+sudo locale-gen en_US en_US.UTF-8
+sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+export LANG=en_US.UTF-8
+```
+
+### 1.2 Setup sources
+```bash
+sudo apt update && sudo apt install curl gnupg lsb-release
+curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | sudo gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg
+```
+
+### 1.3 Add ROS 2 repository
+```bash
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(source /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+```
+
+### 1.4 Install ROS 2 packages
+```bash
+sudo apt update
+sudo apt install ros-humble-desktop
+```
+
+### 1.5 Install colcon and other tools
+```bash
+sudo apt install python3-colcon-common-extensions python3-rosdep python3-vcstool
+```
+
+### 1.6 Initialize rosdep
+```bash
+sudo rosdep init
+rosdep update
+```
+
+## Step 2: Source ROS 2 Environment
+
+### 2.1 Source the setup script
+```bash
+source /opt/ros/humble/setup.bash
+```
+
+### 2.2 Add to your bashrc to source automatically
+```bash
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+```
+
+## Step 3: Create a ROS 2 Workspace
+
+### 3.1 Create workspace directory
+```bash
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws
+```
+
+### 3.2 Build the workspace
+```bash
+colcon build
+```
+
+### 3.3 Source the workspace
+```bash
+source install/setup.bash
+```
+
+## Step 4: Verify Installation
+
+### 4.1 Check ROS 2 version
+```bash
+ros2 --version
+```
+
+### 4.2 Run a simple demo
+```bash
+# Terminal 1: Run the talker
+source ~/ros2_ws/install/setup.bash
+ros2 run demo_nodes_cpp talker
+
+# Terminal 2: Run the listener (in a new terminal)
+source ~/ros2_ws/install/setup.bash
+ros2 run demo_nodes_py listener
+```
+
+You should see messages being published by the talker and received by the listener.
+
+## Step 5: Explore ROS 2 Tools
+
+### 5.1 List available nodes
+```bash
+ros2 node list
+```
+
+### 5.2 List available topics
+```bash
+ros2 topic list
+```
+
+### 5.3 Echo messages on a topic
+```bash
+# While the talker/listener demo is running
+ros2 topic echo /chatter std_msgs/msg/String
+```
+
+### 5.4 Check topic info
+```bash
+ros2 topic info /chatter
+```
+
+## Step 6: Create Your First Package
+
+### 6.1 Create a new package
+```bash
+cd ~/ros2_ws/src
+ros2 pkg create --build-type ament_python my_robot_pkg --dependencies rclpy std_msgs geometry_msgs
+```
+
+### 6.2 Explore the package structure
+```bash
+cd my_robot_pkg
+ls -la
+```
+
+You should see the following structure:
+```
+my_robot_pkg/
+├── package.xml
+├── setup.cfg
+├── setup.py
+├── resource/
+├── test/
+└── my_robot_pkg/
+    └── __init__.py
+```
+
+### 6.3 Create a simple publisher node
+Create a file `my_robot_pkg/my_robot_pkg/simple_publisher.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+
+class SimplePublisher(Node):
+    def __init__(self):
+        super().__init__('simple_publisher')
+        self.publisher = self.create_publisher(String, 'robot_status', 10)
+        timer_period = 1  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.i = 0
+
+    def timer_callback(self):
+        msg = String()
+        msg.data = f'Robot is operational - {self.i}'
+        self.publisher.publish(msg)
+        self.get_logger().info(f'Publishing: "{msg.data}"')
+        self.i += 1
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    simple_publisher = SimplePublisher()
+    
+    try:
+        rclpy.spin(simple_publisher)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        simple_publisher.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 6.4 Make the script executable
+```bash
+chmod +x my_robot_pkg/simple_publisher.py
+```
+
+### 6.5 Update setup.py to include your script
+Edit `setup.py` to include the following in the `entry_points` section:
+
+```python
+entry_points={
+    'console_scripts': [
+        'simple_publisher = my_robot_pkg.simple_publisher:main',
+    ],
+},
+```
+
+### 6.6 Build the package
+```bash
+cd ~/ros2_ws
+colcon build --packages-select my_robot_pkg
+```
+
+### 6.7 Source the workspace
+```bash
+source install/setup.bash
+```
+
+### 6.8 Run your publisher
+```bash
+ros2 run my_robot_pkg simple_publisher
+```
+
+In another terminal, echo the messages:
+```bash
+source ~/ros2_ws/install/setup.bash
+ros2 topic echo /robot_status std_msgs/msg/String
+```
+
+## Step 7: Create a Simple Subscriber
+
+### 7.1 Create a subscriber node
+Create a file `my_robot_pkg/my_robot_pkg/simple_subscriber.py`:
+
+```python
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+
+class SimpleSubscriber(Node):
+    def __init__(self):
+        super().__init__('simple_subscriber')
+        self.subscription = self.create_subscription(
+            String,
+            'robot_status',
+            self.listener_callback,
+            10)
+        self.subscription  # prevent unused variable warning
+
+    def listener_callback(self, msg):
+        self.get_logger().info(f'I heard: "{msg.data}"')
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    simple_subscriber = SimpleSubscriber()
+    
+    try:
+        rclpy.spin(simple_subscriber)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        simple_subscriber.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+### 7.2 Make the script executable
+```bash
+chmod +x my_robot_pkg/simple_subscriber.py
+```
+
+### 7.3 Update setup.py to include the subscriber
+Add to the `entry_points` section in `setup.py`:
+
+```python
+entry_points={
+    'console_scripts': [
+        'simple_publisher = my_robot_pkg.simple_publisher:main',
+        'simple_subscriber = my_robot_pkg.simple_subscriber:main',
+    ],
+},
+```
+
+### 7.4 Rebuild the package
+```bash
+cd ~/ros2_ws
+colcon build --packages-select my_robot_pkg
+source install/setup.bash
+```
+
+### 7.5 Test publisher and subscriber together
+Terminal 1:
+```bash
+ros2 run my_robot_pkg simple_publisher
+```
+
+Terminal 2:
+```bash
+ros2 run my_robot_pkg simple_subscriber
+```
+
+You should see the publisher sending messages and the subscriber receiving them.
+
+## Step 8: Use rqt Tools
+
+### 8.1 Launch rqt
+```bash
+rqt
+```
+
+### 8.2 Explore different plugins
+- Use `Plugins > Introspection > Node Graph` to visualize the node connections
+- Use `Plugins > Topics > Topic Monitor` to monitor topics
+- Use `Plugins > Topics > Message Publisher` to manually publish messages
+
+## Step 9: Create a Launch File
+
+### 9.1 Create a launch directory
+```bash
+mkdir -p ~/ros2_ws/src/my_robot_pkg/launch
+```
+
+### 9.2 Create a launch file
+Create `~/ros2_ws/src/my_robot_pkg/launch/simple_launch.py`:
+
+```python
+from launch import LaunchDescription
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    return LaunchDescription([
+        Node(
+            package='my_robot_pkg',
+            executable='simple_publisher',
+            name='simple_publisher',
+            parameters=[
+                # Add parameters here if needed
+            ]
+        ),
+        Node(
+            package='my_robot_pkg',
+            executable='simple_subscriber',
+            name='simple_subscriber',
+        )
+    ])
+```
+
+### 9.3 Build and run the launch file
+```bash
+cd ~/ros2_ws
+colcon build --packages-select my_robot_pkg
+source install/setup.bash
+ros2 launch my_robot_pkg simple_launch.py
+```
+
+## Troubleshooting
+
+### Common Issues:
+
+1. **Package not found**: Make sure you've sourced the workspace (`source install/setup.bash`)
+
+2. **Permission denied**: Make sure your Python scripts are executable (`chmod +x script.py`)
+
+3. **No messages received**: Check that both nodes are on the same ROS domain ID:
+   ```bash
+   echo $ROS_DOMAIN_ID  # Should be the same for both terminals
+   ```
+
+4. **Build errors**: Check that all dependencies are properly declared in `package.xml`
+
+## Lab Summary
+
+In this lab, you have:
+- Installed ROS 2 Humble Hawksbill
+- Created and built your first ROS 2 workspace
+- Created a custom ROS 2 package
+- Implemented a publisher and subscriber
+- Used ROS 2 tools for monitoring and visualization
+- Created and used a launch file
+
+## Reflection Questions
+
+1. What is the purpose of sourcing the setup.bash file in ROS 2?
+2. Why is it important to have separate publisher and subscriber nodes in ROS 2?
+3. How do launch files improve the usability of ROS 2 systems?
+4. What are the advantages of using workspaces in ROS 2 development?
+
+## Next Steps
+
+After completing this lab, you should have a functional ROS 2 development environment. In the next lab, you'll explore more advanced ROS 2 concepts including services, actions, and parameters.
